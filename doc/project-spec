@@ -1,0 +1,432 @@
+(ˉ﹃ˉ), [24.11.2026 20:27]
+AI-Powered Disaster Damage Assessment & Response Prioritization
+1. Project Overview
+We want to build an AI-powered web application that analyzes satellite imagery after natural disasters and helps emergency response teams identify and prioritize affected areas.
+The system uses a pretrained Computer Vision model to detect and classify visible building damage.
+It then divides the affected area into smaller zones and ranks them according to damage severity.
+The goal is not only to identify damaged areas but also to help decision-makers understand which areas require attention first.
+The system should support disasters such as earthquakes, floods, hurricanes, and wildfires.
+Main Features:
+AI-powered damage detection using satellite imagery.
+Damage severity classification.
+Before-and-after satellite image visualization.
+Automatic division of affected areas into zones.
+Intelligent zone priority ranking.
+High, Medium, and Low priority classification.
+Interactive dashboard with damage statistics.
+Clear visual explanations of why each zone received its priority.
+The first version should be a functional MVP, not a production-ready emergency response system.
+We want to prioritize simplicity, actual AI inference, a polished interface, and reliable execution.
+2. System Architecture
+The architecture should follow this pipeline:
+         Satellite Images
+      (Before & After Disaster)
+                 |
+                 v
+         Image Processing
+                 |
+                 v
+       Pretrained AI Model
+            SegFormer-B0
+                 |
+                 v
+       Damage Segmentation
+                 |
+                 v
+       Damage Classification
+    No Damage / Minor / Major /
+              Destroyed
+                 |
+                 v
+          Zone Division
+            (3x3 Grid)
+                 |
+                 v
+       Priority Ranking Engine
+                 |
+                 v
+        Priority Classification
+         High / Medium / Low
+                 |
+                 v
+         Interactive Dashboard
+                 |
+                 v
+       Damage Analysis & Reports
+Important architectural detail:
+The pretrained SegFormer model uses the post-disaster image for inference.
+The pre-disaster image is displayed to help users visually compare the area before and after the disaster.
+Do not claim that this model performs two-image change detection.
+3. Dataset
+Dataset Name: xBD (xView2)
+Official Dataset:
+https://xview2.org/dataset
+Official Baseline Repository:
+https://github.com/DIUx-xView/xView2_baseline
+xBD is a publicly available research dataset developed for building damage assessment using satellite imagery.
+It contains real satellite images collected before and after natural disasters.
+Dataset Contents
+The dataset includes:
+Pre-disaster satellite images.
+Post-disaster satellite images.
+Building location annotations.
+Building damage classification labels.
+Disaster metadata.
+Geographic information for the annotated imagery.
+The images are typically 1024 × 1024 pixels.
+Damage Classes
+The dataset provides four main damage categories:
+Class Description
+No Damage No visible building damage
+Minor Damage Minor visible damage
+Major Damage Significant visible damage
+Destroyed Severe destruction
+Some buildings may be marked as unclassified. These should be excluded from ground-truth evaluation.
+How to Use the Dataset
+For the MVP:
+Download the dataset from the official website.
+Registration may be required.
+Select 2–3 image pairs showing different damage levels.
+Use the matching pre-disaster and post-disaster images.
+Keep their corresponding JSON annotations when available.
+Do not download or process the entire dataset unless necessary.
+We want a small dataset suitable for a fast demonstration.
+The application must allow users to upload their own images or select local sample cases.
+Do not assume the dataset files already exist.
+If the dataset is unavailable, build the application and provide clear instructions for adding the required files.
+
+(ˉ﹃ˉ), [24.11.2026 20:27]
+Do not generate synthetic damage predictions and present them as real AI results.
+4. AI Model
+Selected Model: SegFormer-B0
+Hugging Face Repository:
+https://huggingface.co/BiliSakura/xBD-post-bda-models-transformers
+Model Checkpoint:
+segformer-b0/xbd-baseline/best
+This is a pretrained semantic segmentation model fine-tuned on xBD post-disaster satellite imagery.
+We selected it because:
+It is already trained on building damage data.
+It is relatively lightweight.
+It does not require training from scratch.
+It can run with PyTorch and Hugging Face Transformers.
+It produces damage segmentation predictions.
+It can run on CPU, although GPU inference is preferable.
+Model Input
+A post-disaster RGB satellite image.
+The original training and evaluation use 1024 × 1024 image tiles.
+For inference, apply the normalization specified in the model documentation.
+Model Output
+The model produces a segmentation mask containing five classes:
+Class ID Class
+0 Background
+1 No Damage
+2 Minor Damage
+3 Major Damage
+4 Destroyed
+Every pixel is assigned a predicted class.
+The output can be displayed as a colored overlay on top of the satellite image.
+Example Model Loading
+Use the official checkpoint directly:
+import torch
+from transformers import SegformerForSemanticSegmentation
+
+MODEL_REPO = "BiliSakura/xBD-post-bda-models-transformers"
+MODEL_CHECKPOINT = "segformer-b0/xbd-baseline/best"
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+model = SegformerForSemanticSegmentation.from_pretrained(
+    MODEL_REPO,
+    subfolder=MODEL_CHECKPOINT
+)
+
+model = model.to(device)
+model.eval()
+Follow the official model documentation for image preprocessing.
+The inference pipeline should:
+Load the post-disaster image.
+Convert it to RGB.
+Convert the image to a PyTorch tensor.
+Normalize using ImageNet mean and standard deviation.
+Run inference using the pretrained model.
+Resize the output logits to match the image dimensions.
+Apply argmax to obtain the predicted segmentation classes.
+Generate a colored damage mask.
+The model should be loaded only once and cached.
+Do not retrain or fine-tune the model for the first MVP.
+Damage Visualization
+Use these colors:
+Background: Transparent
+No Damage: Green
+Minor Damage: Yellow
+Major Damage: Orange
+Destroyed: Red
+Display the segmentation result directly over the satellite image.
+Provide a slider to control overlay transparency.
+Important: This is semantic segmentation. The output represents predicted damage pixels, not automatically verified individual building counts.
+Do not display estimated building counts unless an actual building-instance extraction method has been implemented and tested.
+5. Zone Priority Ranking
+This is the main decision-support feature of our project.
+After the AI model generates the damage segmentation mask, the system should automatically divide the image into a 3 × 3 grid.
+This creates nine zones:
++----------+----------+----------+
+|  Zone A  |  Zone B  |  Zone C  |
++----------+----------+----------+
+|  Zone D  |  Zone E  |  Zone F  |
++----------+----------+----------+
+|  Zone G  |  Zone H  |  Zone I  |
++----------+----------+----------+
+Each zone should receive a damage severity score calculated from the AI predictions.
+Ranking Method
+Start with a simple weighted scoring algorithm.
+Assign damage weights:
+Damage Class Weight
+No Damage 0
+Minor Damage 1
+Major Damage 3
+Destroyed 5
+Calculate the score for each zone using predicted building-damage pixels.
+Priority Score =
+
+(1 × Minor Damage Pixels
++ 3 × Major Damage Pixels
++ 5 × Destroyed Pixels)
+
+÷ Total Predicted Building Pixels
+Where:
+Total Predicted Building Pixels
+includes pixels classified as No Damage, Minor Damage, Major Damage, or Destroyed.
+Background pixels are excluded.
+The score ranges from 0 to 5.
+If a zone has no detected building pixels, classify it as "Insufficient Data" rather than Low Priority.
+Priority Levels
+For the initial prototype, use configurable thresholds:
+Score Priority
+2.5–5.0 High
+1.0–<2.5 Medium
+0–<1.0 Low
+These thresholds are preliminary design choices, not scientifically validated emergency response standards.
+
+(ˉ﹃ˉ), [24.11.2026 20:27]
+Allow the thresholds to be changed in the application configuration.
+Example Output
+Use actual model results when running the application.
+The following is only an illustrative example:
+Zone Damage Score Priority
+Zone D 4.2 High
+Zone A 3.1 High
+Zone G 1.8 Medium
+Zone C 0.6 Low
+Sort the zones from highest to lowest score.
+The application should explain each ranking using actual damage statistics.
+For example:
+"Zone D received a High Priority classification because a large proportion of its detected building area was classified as Major Damage or Destroyed."
+This first version ranks visual damage severity. It does not estimate casualties, population exposure, or real-world rescue urgency.
+6. Web Application
+Technology Stack
+Keep the application simple.
+Component Technology
+Programming Language Python
+Frontend Streamlit
+AI Framework PyTorch
+Pretrained Model SegFormer-B0
+Model Integration Hugging Face Transformers
+Image Processing Pillow, NumPy
+Data Processing Pandas
+Visualizations Plotly
+Image Overlays Pillow / OpenCV
+Dataset xBD
+Do not use React, Next.js, FastAPI, databases, or unnecessary frameworks for the initial MVP.
+We want the entire prototype to run locally using one Python application.
+Dashboard Design
+Create a professional, modern disaster management dashboard.
+The interface should feel like an emergency response intelligence platform.
+Use a clean layout with cards, tables, and satellite image visualizations.
+Section 1: Disaster Selection
+Allow users to:
+Select an available disaster case.
+View the disaster name and type.
+Upload pre-disaster and post-disaster images.
+Click "Analyze with AI".
+Section 2: Satellite Image Analysis
+Display:
+Before Disaster | After Disaster | AI Damage Overlay
+Include:
+Image comparison.
+AI segmentation results.
+Damage color legend.
+Overlay transparency slider.
+Section 3: Damage Overview
+Display summary statistics calculated from the model output:
+Percentage of predicted building pixels with visible damage.
+Minor damage proportion.
+Major damage proportion.
+Destroyed proportion.
+Number of analyzed zones.
+Do not label pixel counts as building counts.
+Section 4: Priority Map
+Display the satellite image divided into nine zones.
+Color zones according to their estimated priority:
+Red: High
+Orange: Medium
+Green: Low
+Gray: Insufficient Data
+Allow users to select a zone.
+Section 5: Zone Ranking
+Show a ranked table containing:
+Zone name.
+Damage severity score.
+Priority level.
+Damage breakdown.
+When the user selects a zone, display its detailed damage statistics.
+Section 6: Analysis Summary
+Generate a short summary based on the calculated results.
+For example:
+"The AI analysis identified three high-priority zones. Zone D received the highest severity score due to the concentration of major damage and destroyed areas."
+For the first MVP, this summary can be generated using predefined templates.
+An optional LLM integration can be added later to generate more natural explanations.
+However, the LLM must only explain verified numerical outputs from the system.
+It must not invent damage statistics or emergency recommendations.
+7. Application Workflow
+The complete workflow should be:
+Step 1 — Select a Disaster
+The user selects a disaster case containing satellite imagery.
+Step 2 — View Satellite Images
+The dashboard displays the original images from before and after the disaster.
+Step 3 — Run AI Analysis
+The user clicks "Analyze with AI".
+The application sends the post-disaster image to the pretrained SegFormer model.
+Step 4 — Display Damage Detection
+The model generates a segmentation mask showing different damage severity levels.
+Step 5 — Calculate Zone Priorities
+The application divides the image into nine zones and calculates a severity score for each one.
+Step 6 — Rank the Zones
+Zones are ranked from highest to lowest estimated severity.
+Step 7 — Present Results
+The dashboard displays the colored zone overlay, ranking table, summary statistics, and explanations.
+All displayed predictions must come from actual model inference.
+8. Project Structure
+Use a simple and readable structure:
+
+(ˉ﹃ˉ), [24.11.2026 20:27]
+disaster-response-ai/
+│
+├── app.py
+│
+├── model.py
+│
+├── image_processing.py
+│
+├── ranking.py
+│
+├── data_loader.py
+│
+├── requirements.txt
+│
+├── README.md
+│
+├── data/
+│   └── samples/
+│
+└── assets/
+File Responsibilities
+app.py
+Builds the Streamlit dashboard and connects all components.
+model.py
+Loads the SegFormer model and performs inference.
+image_processing.py
+Prepares satellite images and creates colored damage overlays.
+ranking.py
+Divides the segmentation mask into zones, calculates scores, and ranks priorities.
+data_loader.py
+Loads local disaster cases, images, and optional xBD annotations.
+requirements.txt
+Contains all required Python dependencies.
+README.md
+Explains installation, data preparation, model loading, and how to run the application.
+9. How to Build the Prototype
+Implement the project in this order.
+Phase 1: AI Integration
+Start by implementing the real SegFormer model.
+Install dependencies.
+Download the pretrained checkpoint automatically through Hugging Face.
+Load one post-disaster satellite image.
+Run actual inference.
+Generate the five-class segmentation mask.
+Save or display the overlay.
+Verify that the model produces a correctly sized segmentation mask before continuing.
+Do not proceed with an artificial or hardcoded segmentation result.
+Phase 2: Ranking Engine
+Once inference works:
+Divide the predicted mask into nine zones.
+Count pixels by predicted damage class.
+Calculate the weighted score for each zone.
+Assign High, Medium, Low, or Insufficient Data.
+Sort zones by score.
+Test the calculations separately using small manually created masks.
+These test masks are allowed for unit testing but must not be presented as AI predictions.
+Phase 3: Dashboard
+Build the Streamlit interface.
+Connect the model output to the dashboard.
+Display the image overlays, damage statistics, zone rankings, and interactive zone details.
+Phase 4: Real Dataset Testing
+Test the system on a small selection of real xBD images.
+If matching ground-truth annotations are available, compare the AI output against the reference masks.
+Useful evaluation metrics include:
+Intersection over Union (IoU).
+Per-class precision and recall.
+Confusion matrix.
+Inference time.
+Evaluation must be separate from model inference.
+Ground-truth labels must never be substituted for AI predictions during the live demonstration.
+10. Running the Application
+Use Python 3.11 or a compatible supported version.
+Create a virtual environment and install the required dependencies.
+python -m venv .venv
+Activate the environment.
+On Windows:
+.venv\Scripts\activate
+Install dependencies:
+pip install -r requirements.txt
+Start the application:
+streamlit run app.py
+The model should download automatically during its first initialization.
+Support CPU inference when CUDA is unavailable.
+Use GPU automatically when supported.
+Provide useful loading indicators and clear error messages if model initialization fails.
+11. Important Implementation Requirements
+Real AI inference is mandatory. The project must not be a UI-only demonstration.
+Use the pretrained SegFormer-B0 checkpoint. Do not train a new model.
+Make the implementation simple, understandable, and modular.
+Do not use mock predictions in the actual analysis workflow.
+Never describe ground-truth annotations as AI predictions.
+Handle missing images and model download errors gracefully.
+Cache the model to avoid downloading or loading it repeatedly.
+Use lightweight dependencies wherever possible.
+Keep all ranking formulas transparent and easy to modify.
+Use the real model output to generate the damage statistics and priority rankings.
+Do not invent geographic coordinates. The initial 3 × 3 zones are image-based sectors unless valid georeferencing information is available.
+Avoid adding unnecessary features that could slow down development.
+Keep dataset and model licenses in mind. The selected model is released under CC BY-NC-SA 4.0.
+Treat the prototype as a decision-support demonstration, not an operational emergency response system.
+12. Expected Final MVP
+The final prototype should demonstrate the following:
+
+(ˉ﹃ˉ), [24.11.2026 20:27]
+A user opens the dashboard and selects a real disaster case.
+The system displays satellite imagery from before and after the disaster.
+The user clicks "Analyze with AI".
+The pretrained Computer Vision model analyzes the post-disaster image and identifies visible damage patterns.
+The application displays the damage segmentation using different colors.
+Next, the system divides the analyzed area into zones and calculates their severity scores.
+Finally, the dashboard shows which zones have High, Medium, and Low priority, along with clear explanations.
+Our main goal is to demonstrate how AI-based satellite damage assessment can be transformed into understandable geographic response priorities.
+Final Development Instruction
+Build this project as a working prototype, not just a design.
+Start with the actual AI model integration and confirm inference works before building the rest of the dashboard.
+Use the provided dataset and model references.
+Keep the architecture lightweight and the code easy to understand.
+Implement the complete MVP, including model inference, damage visualization, priority ranking, and dashboard integration.
+Run the application, fix errors, and verify the end-to-end workflow using real sample imagery.
+Document anything that cannot be completed or verified.
+Do not add unnecessary complexity.
