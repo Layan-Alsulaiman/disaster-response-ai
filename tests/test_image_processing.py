@@ -108,3 +108,23 @@ def test_overlay_mask():
 
     with pytest.raises(ValueError):
         overlay_mask(base, np.zeros((3, 2), dtype=np.uint8))  # transposed size
+
+
+def test_draw_zone_grid_tints_and_outlines():
+    import ranking as rk
+    from image_processing import draw_zone_grid
+
+    mask = np.zeros((90, 90), dtype=np.uint8)
+    mask[:30, :30] = 4                       # zone A all destroyed -> High
+    res = rk.rank_zones(mask)
+    base = Image.new("RGB", (90, 90), (0, 0, 0))
+    out = np.asarray(draw_zone_grid(base, res.grid_order(), rk.PRIORITY_COLORS, selected="A"))
+    assert out.shape == (90, 90, 3)
+    # inside zone A (away from label/border) the High (red) tint dominates
+    px = out[8, 22]
+    assert px[0] > px[1] and px[0] > px[2]
+    # an Insufficient Data zone gets a neutral grey tint
+    g = out[33, 33]                          # zone E corner, clear of label and borders
+    assert abs(int(g[0]) - int(g[1])) < 5 and g[0] > 20
+    # selected zone has a yellow outline on its edge
+    assert tuple(out[0, 15]) == (255, 221, 0)

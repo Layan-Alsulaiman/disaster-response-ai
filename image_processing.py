@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import BinaryIO, Union
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 # --- Class definitions (must match the checkpoint's config.json id2label) ---
 CLASS_NAMES = {
@@ -130,3 +130,62 @@ def overlay_mask(image: Image.Image, mask: np.ndarray, alpha: float = 0.5) -> Im
         )
     layer = colorize_mask(mask, alpha=alpha)
     return Image.alpha_composite(base, layer).convert("RGB")
+
+
+# ---------------------------------------------------------------------------
+# Priority map (3x3 zone grid drawn over the image)
+# ---------------------------------------------------------------------------
+
+def _font(size: int):
+    try:
+        return ImageFont.load_default(size=size)   # Pillow >= 10.1 (scalable)
+    except TypeError:                               # older Pillow
+        return ImageFont.load_default()
+
+
+def draw_zone_grid(
+    image: Image.Image,
+    zones,
+    priority_colors: dict[str, tuple[int, int, int]],
+    selected: str | None = None,
+    fill_alpha: float = 0.38,
+) -> Image.Image:
+    """Tint each zone by its priority and label it.
+
+    `zones` are objects with .bbox (x0, y0, x1, y1), .letter, .priority and
+    .score (None for Insufficient Data) - e.g. ranking.Zone. `selected` is a
+    zone letter or name to outline.
+    """
+    base = image.convert("RGBA")
+    w, h = base.size
+    tint = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    td = ImageDraw.Draw(tint)
+    for z in zones:
+        r, g, b = priority_colors[z.priority]
+        td.rectangle(z.bbox, fill=(r, g, b, round(255 * fill_alpha)))
+    out = Image.alpha_composite(base, tint)
+
+    d = ImageDraw.Draw(out)
+    line = max(2, round(min(w, h) / 300))
+    big, small = _font(max(14, round(min(w, h) / 12))), _font(max(10, round(min(w, h) / 34)))
+    for z in zones:
+        x0, y0, x1, y1 = z.bbox
+        d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 255, 255, 230), width=line)
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        stroke = max(1, line // 2 + 1)
+        d.text((cx, cy - small.size * 0.6), z.letter, font=big, anchor="mm",
+               fill="white", stroke_width=stroke, stroke_fill="black")
+        sub = z.priority if z.score is None else f"{z.priority} · {z.score:.2f}"
+        d.text((cx, cy + big.size * 0.55), sub, font=small, anchor="mm",
+               fill="white", stroke_width=stroke, stroke_fill="black")
+
+    if selected:
+        sel = next((z for z in zones if selected in (z.letter, getattr(z, "name", None))), None)
+        if sel:
+            x0, y0, x1, y1 = sel.bbox
+            d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 221, 0, 255), width=line * 3)
+    return out.convert("RGB")
+
+
+def crop_box(image: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:
+    return image.crop(bbox)

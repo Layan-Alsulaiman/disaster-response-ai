@@ -4,8 +4,9 @@ Usage:
     python verify_inference.py data/samples/<case>/post.png
     python verify_inference.py path/to/post.png --out outputs --alpha 0.5
 
-Saves <name>_mask.png (class IDs 0..4), <name>_mask_color.png and
-<name>_overlay.png, and prints per-class pixel statistics. Exits non-zero if
+Saves <name>_mask.png (class IDs 0..4), <name>_mask_color.png,
+<name>_overlay.png and <name>_priority_map.png, and prints per-class pixel
+statistics and the 3x3 zone ranking. Exits non-zero if
 any check fails.
 """
 
@@ -24,6 +25,7 @@ from image_processing import (
     NUM_CLASSES,
     class_pixel_counts,
     colorize_mask,
+    draw_zone_grid,
     load_rgb_image,
     overlay_mask,
 )
@@ -91,6 +93,16 @@ def main() -> int:
     colorize_mask(mask).save(out / f"{stem}_mask_color.png")
     overlay_mask(image, mask, alpha=args.alpha).save(out / f"{stem}_overlay.png")
     print(f"\nSaved mask, colour mask and overlay to {out}/")
+
+    import ranking as rk
+
+    result = rk.rank_zones(mask)
+    print("\nZone ranking (3x3 image sectors, default thresholds):")
+    for row in rk.zones_table(result):
+        score = "  -  " if row["Score"] is None else f"{row['Score']:.2f}"
+        print(f"  {str(row['Rank']):>2}  {row['Zone']}  score {score}  {row['Priority']}")
+    print("\n" + rk.summarize(result))
+    draw_zone_grid(image, result.grid_order(), rk.PRIORITY_COLORS).save(out / f"{stem}_priority_map.png")
 
     print("\nChecks:")
     for name, ok in checks.items():
