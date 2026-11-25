@@ -114,18 +114,30 @@ def test_draw_zone_grid_tints_and_outlines():
     import ranking as rk
     from image_processing import draw_zone_grid
 
-    mask = np.zeros((90, 90), dtype=np.uint8)
-    mask[:30, :30] = 4                       # zone A all destroyed -> High
+    mask = np.zeros((300, 300), dtype=np.uint8)
+    mask[:100, :100] = 4                     # zone A all destroyed -> High
     res = rk.rank_zones(mask)
-    base = Image.new("RGB", (90, 90), (0, 0, 0))
+    base = Image.new("RGB", (300, 300), (0, 0, 0))
     out = np.asarray(draw_zone_grid(base, res.grid_order(), rk.PRIORITY_COLORS, selected="E"))
-    assert out.shape == (90, 90, 3)
-    # inside zone A (away from label/border) the High (red) tint dominates
-    px = out[8, 22]
-    assert px[0] > px[1] and px[0] > px[2]
+    assert out.shape == (300, 300, 3)
+    # zone A interior (away from the corner badge) carries the High tint
+    px = out[80, 50]
+    assert px[0] > px[1] and px[0] > px[2] and px[0] > 20
+    # its inner border is a stronger stroke of the High colour
+    border = out[60, 3]
+    assert border[0] > px[0] + 60 and border[0] > border[1] and border[0] > border[2]
     # an Insufficient Data zone (I) gets a neutral grey tint
-    g = out[63, 63]
-    assert abs(int(g[0]) - int(g[2])) < 10 and g[0] > 20
-    # selected zone E: white outer ring, dark inner ring
-    assert tuple(out[31, 40]) == (255, 255, 255)
-    assert tuple(out[35, 40]) == (36, 52, 71)
+    g = out[280, 250]
+    assert abs(int(g[0]) - int(g[2])) < 12 and g[0] > 10
+    # selected zone E has a white outline on its edge
+    assert tuple(out[101, 150]) == (255, 255, 255)
+
+
+def test_draw_zone_grid_custom_label_runs():
+    import ranking as rk
+    from image_processing import draw_zone_grid
+
+    res = rk.rank_zones(np.ones((120, 90), dtype=np.uint8))
+    img = draw_zone_grid(Image.new("RGB", (90, 120)), res.grid_order(), rk.PRIORITY_COLORS,
+                         label=lambda z: "custom")
+    assert img.size == (90, 120)

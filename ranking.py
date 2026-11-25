@@ -32,10 +32,10 @@ GRID_SIZE = 3                                         # 3 x 3 = 9 zones, named A
 HIGH, MEDIUM, LOW, INSUFFICIENT = "High", "Medium", "Low", "Insufficient Data"
 PRIORITY_ORDER = [HIGH, MEDIUM, LOW, INSUFFICIENT]
 PRIORITY_COLORS = {                                   # RGB, used by the priority map
-    HIGH: (196, 69, 54),            # Emergency Red  #C44536
-    MEDIUM: (217, 154, 50),         # Amber          #D99A32
-    LOW: (57, 133, 120),            # Muted Teal     #398578
-    INSUFFICIENT: (156, 163, 175),  # Neutral grey   #9CA3AF
+    HIGH: (240, 100, 100),          # Emergency coral  #F06464
+    MEDIUM: (233, 180, 76),         # Warm amber       #E9B44C
+    LOW: (69, 184, 160),            # Muted teal       #45B8A0
+    INSUFFICIENT: (100, 116, 139),  # Slate            #64748B
 }
 BUILDING_CLASSES = (1, 2, 3, 4)
 DAMAGE_CLASSES = (2, 3, 4)
