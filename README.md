@@ -1,7 +1,7 @@
 # 🛰️ Disaster Damage Intelligence
 
 AI-powered building-damage assessment on post-disaster satellite imagery, turned into ranked response zones.
-Hackathon MVP. Full specification: [`doc/project-spec`](doc/project-spec).
+https://disaster-response-ai-geospace.streamlit.app/
 
 A pretrained SegFormer-B0 model (fine-tuned on xBD) segments every pixel of a **post-disaster** image into
 Background / No Damage / Minor / Major / Destroyed. The app splits the image into a 3 × 3 grid, scores each zone
