@@ -191,3 +191,36 @@ def test_zones_table_rows():
     assert len(rows) == 9
     assert rows[0]["Zone"] == "Zone A" and rows[0]["Score"] == 5.0 and rows[0]["Destroyed %"] == 100.0
     assert rows[-1]["Score"] is None and rows[-1]["Rank"] == "–"
+
+
+# --- plain-language dashboard text ------------------------------------------
+
+def test_zone_insight_by_priority():
+    m = mask_from_zones({"A": [3, 4], "E": [1, 3], "B": [1, 1, 1, 2]})
+    res = rk.rank_zones(m)
+    assert "100% of the detected building area shows major damage" in rk.zone_insight(res.by_name("A"))
+    assert rk.zone_insight(res.by_name("E")).startswith("Moderate damage: 50%")
+    assert "75% of the detected building area shows no visible damage" in rk.zone_insight(res.by_name("B"))
+    assert "not scored" in rk.zone_insight(res.by_name("C"))
+
+
+def test_zone_insight_flags_sparse_buildings():
+    m = np.zeros((300, 300), dtype=np.uint8)
+    m[0, 0] = 4                                   # one building pixel in zone A
+    assert "less reliable" in rk.zone_insight(rk.rank_zones(m).by_name("A"))
+
+
+def test_plain_summary_uses_computed_numbers():
+    m = mask_from_zones({"A": 4, "D": [3, 4], "E": [1, 3], "B": [1, 1, 1, 2]})
+    text = rk.plain_summary(rk.rank_zones(m))
+    assert text.startswith("2 of 9 zones are high priority and 1 is medium priority.")
+    assert "Zone A shows the most severe damage, with 100%" in text
+    assert "5 zones contain no detected buildings" in text
+    assert "buildings were" not in text and "pixel" not in text
+
+
+def test_plain_summary_edge_cases():
+    assert "No buildings were detected" in rk.plain_summary(rk.rank_zones(np.zeros((9, 9), np.uint8)))
+    intact = rk.plain_summary(rk.rank_zones(np.ones((9, 9), np.uint8)))
+    assert intact.startswith("No zone reached medium or high priority")
+    assert "0% of the detected building area shows visible damage" in intact

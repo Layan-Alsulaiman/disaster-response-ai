@@ -13,7 +13,7 @@ pillow>=10.0
 numpy>=1.26
 
 # Dashboard (later phases)
-streamlit>=1.38
+streamlit>=1.42        # keyed containers, plotly click selection, popover
 pandas>=2.1
 plotly>=5.20
 

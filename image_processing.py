@@ -32,10 +32,10 @@ NUM_CLASSES = len(CLASS_NAMES)
 # RGB colours for the overlay. Background is drawn fully transparent.
 CLASS_COLORS = {
     0: (0, 0, 0),         # Background (transparent)
-    1: (0, 200, 0),       # No Damage   - green
-    2: (255, 230, 0),     # Minor       - yellow
-    3: (255, 140, 0),     # Major       - orange
-    4: (230, 0, 0),       # Destroyed   - red
+    1: (52, 195, 143),    # No Damage   - green   #34C38F
+    2: (242, 210, 75),    # Minor       - yellow  #F2D24B
+    3: (240, 140, 60),    # Major       - orange  #F08C3C
+    4: (229, 72, 77),     # Destroyed   - red     #E5484D
 }
 
 # --- Normalization from the model card ---
@@ -148,43 +148,61 @@ def draw_zone_grid(
     zones,
     priority_colors: dict[str, tuple[int, int, int]],
     selected: str | None = None,
-    fill_alpha: float = 0.38,
+    fill_alpha: float = 0.22,
+    label=None,
 ) -> Image.Image:
-    """Tint each zone by its priority and label it.
+    """Draw the zone grid over the image: light priority tint, thin boundaries,
+    a priority-coloured inner border and a compact label badge per zone.
 
     `zones` are objects with .bbox (x0, y0, x1, y1), .letter, .priority and
     .score (None for Insufficient Data) - e.g. ranking.Zone. `selected` is a
-    zone letter or name to outline.
+    zone letter or name to outline. `label(zone) -> str` overrides the badge
+    text after the zone letter (default: "<priority> <score>").
     """
     base = image.convert("RGBA")
     w, h = base.size
-    tint = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    td = ImageDraw.Draw(tint)
+    unit = min(w, h)
+    line = max(1, round(unit / 512))             # grid line width
+    edge = max(2, round(unit / 400))             # priority border width
+    inset = edge + line
+
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    font = _font(max(11, round(unit / 46)))
+    pad = max(3, round(unit / 170))
+
     for z in zones:
         r, g, b = priority_colors[z.priority]
-        td.rectangle(z.bbox, fill=(r, g, b, round(255 * fill_alpha)))
-    out = Image.alpha_composite(base, tint)
-
-    d = ImageDraw.Draw(out)
-    line = max(2, round(min(w, h) / 300))
-    big, small = _font(max(14, round(min(w, h) / 12))), _font(max(10, round(min(w, h) / 34)))
-    for z in zones:
         x0, y0, x1, y1 = z.bbox
-        d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 255, 255, 230), width=line)
-        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-        stroke = max(1, line // 2 + 1)
-        d.text((cx, cy - small.size * 0.6), z.letter, font=big, anchor="mm",
-               fill="white", stroke_width=stroke, stroke_fill="black")
-        sub = z.priority if z.score is None else f"{z.priority} · {z.score:.2f}"
-        d.text((cx, cy + big.size * 0.55), sub, font=small, anchor="mm",
-               fill="white", stroke_width=stroke, stroke_fill="black")
+        scored = z.score is not None
+        d.rectangle((x0, y0, x1 - 1, y1 - 1), fill=(r, g, b, round(255 * fill_alpha * (1 if scored else 0.5))))
+        if scored:  # zones without buildings recede: faint tint, no coloured border
+            d.rectangle((x0 + inset, y0 + inset, x1 - 1 - inset, y1 - 1 - inset),
+                        outline=(r, g, b, 225), width=edge)
+        d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 255, 255, 80), width=line)
+
+        if label is not None:
+            sub = label(z)
+        else:
+            sub = z.priority if z.score is None else f"{z.priority} {z.score:.1f}"
+        text = f"{z.letter}  {sub}"
+        tx, ty = x0 + inset + edge + pad, y0 + inset + edge + pad
+        left, top, right, bottom = d.textbbox((0, 0), text, font=font)
+        dot = font.size * 0.55
+        bw = (right - left) + dot + pad * 3
+        bh = (bottom - top) + pad * 2
+        d.rounded_rectangle((tx, ty, tx + bw, ty + bh), radius=pad * 1.5, fill=(15, 20, 32, 205))
+        cy = ty + bh / 2
+        d.ellipse((tx + pad, cy - dot / 2, tx + pad + dot, cy + dot / 2), fill=(r, g, b, 255))
+        d.text((tx + pad * 2 + dot, ty + pad - top), text, font=font, fill=(241, 245, 249, 255))
 
     if selected:
         sel = next((z for z in zones if selected in (z.letter, getattr(z, "name", None))), None)
         if sel:
             x0, y0, x1, y1 = sel.bbox
-            d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 221, 0, 255), width=line * 3)
-    return out.convert("RGB")
+            d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 255, 255, 255), width=max(3, line * 3))
+
+    return Image.alpha_composite(base, layer).convert("RGB")
 
 
 def crop_box(image: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:

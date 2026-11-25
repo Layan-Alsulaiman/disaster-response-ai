@@ -32,10 +32,10 @@ GRID_SIZE = 3                                         # 3 x 3 = 9 zones, named A
 HIGH, MEDIUM, LOW, INSUFFICIENT = "High", "Medium", "Low", "Insufficient Data"
 PRIORITY_ORDER = [HIGH, MEDIUM, LOW, INSUFFICIENT]
 PRIORITY_COLORS = {                                   # RGB, used by the priority map
-    HIGH: (220, 38, 38),
-    MEDIUM: (245, 140, 20),
-    LOW: (34, 170, 85),
-    INSUFFICIENT: (140, 140, 140),
+    HIGH: (240, 100, 100),          # Emergency coral  #F06464
+    MEDIUM: (233, 180, 76),         # Warm amber       #E9B44C
+    LOW: (69, 184, 160),            # Muted teal       #45B8A0
+    INSUFFICIENT: (100, 116, 139),  # Slate            #64748B
 }
 BUILDING_CLASSES = (1, 2, 3, 4)
 DAMAGE_CLASSES = (2, 3, 4)
@@ -316,3 +316,63 @@ __all__ = [
     "count_classes", "damage_score", "explain_zone", "overall_statistics", "rank_zones",
     "split_into_zones", "summarize", "validate_thresholds", "zones_table",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Plain-language text for the dashboard (same numbers, no technical terms).
+# "Building area" = share of pixels the model classified as building; it is an
+# area proportion, never a count of buildings.
+# ---------------------------------------------------------------------------
+
+def zone_insight(z: Zone) -> str:
+    """One or two plain sentences explaining a zone's priority."""
+    if z.score is None:
+        return "No buildings were detected in this zone, so it was not scored."
+    if z.priority == HIGH:
+        text = (f"Severe damage pattern: {_pct(z.severe_share)} of the detected building area "
+                f"shows major damage or destruction.")
+    elif z.priority == MEDIUM:
+        text = (f"Moderate damage: {_pct(z.damaged_share)} of the detected building area shows visible damage, "
+                f"including {_pct(z.severe_share)} with major damage or destruction.")
+    else:
+        text = f"Mostly intact: {_pct(z.share(1))} of the detected building area shows no visible damage."
+    if z.building_coverage < 0.01:
+        text += " Very little building area was detected here, so this result is less reliable."
+    return text
+
+
+def plain_summary(result: RankingResult) -> str:
+    """Short assessment summary in plain language, built from computed results only."""
+    stats = overall_statistics(result.overall_counts)
+    scored = [z for z in result.zones if z.score is not None]
+    if not scored:
+        return ("No buildings were detected in this image, so no zone could be assessed. "
+                "Check that the image is a post-disaster satellite view of a built-up area.")
+
+    n_zones = len(result.zones)
+    n_high, n_med = result.count(HIGH), result.count(MEDIUM)
+    n_ins = result.count(INSUFFICIENT)
+
+    if n_high:
+        first = f"{n_high} of {n_zones} zones {'is' if n_high == 1 else 'are'} high priority"
+        first += f" and {n_med} {'is' if n_med == 1 else 'are'} medium priority." if n_med else "."
+    elif n_med:
+        first = f"No zone reached high priority; {n_med} of {n_zones} {'is' if n_med == 1 else 'are'} medium priority."
+    else:
+        first = "No zone reached medium or high priority; detected buildings appear largely intact."
+
+    top = scored[0]
+    if top.severe_share > 0:
+        second = (f"{top.name} shows the most severe damage, with {_pct(top.severe_share)} of its detected "
+                  f"building area showing major damage or destruction.")
+    elif top.damaged_share > 0:
+        second = (f"{top.name} shows the most damage, with {_pct(top.damaged_share)} of its detected "
+                  f"building area showing minor damage.")
+    else:
+        second = ""
+
+    third = (f"Across the whole image, {_pct(stats['damaged_share'])} of the detected building area shows "
+             f"visible damage.")
+    fourth = (f" {n_ins} {'zone contains' if n_ins == 1 else 'zones contain'} no detected buildings."
+              if n_ins else "")
+    return " ".join(p for p in (first, second, third) if p) + fourth
