@@ -118,13 +118,14 @@ def test_draw_zone_grid_tints_and_outlines():
     mask[:30, :30] = 4                       # zone A all destroyed -> High
     res = rk.rank_zones(mask)
     base = Image.new("RGB", (90, 90), (0, 0, 0))
-    out = np.asarray(draw_zone_grid(base, res.grid_order(), rk.PRIORITY_COLORS, selected="A"))
+    out = np.asarray(draw_zone_grid(base, res.grid_order(), rk.PRIORITY_COLORS, selected="E"))
     assert out.shape == (90, 90, 3)
     # inside zone A (away from label/border) the High (red) tint dominates
     px = out[8, 22]
     assert px[0] > px[1] and px[0] > px[2]
-    # an Insufficient Data zone gets a neutral grey tint
-    g = out[33, 33]                          # zone E corner, clear of label and borders
-    assert abs(int(g[0]) - int(g[1])) < 5 and g[0] > 20
-    # selected zone has a yellow outline on its edge
-    assert tuple(out[0, 15]) == (255, 221, 0)
+    # an Insufficient Data zone (I) gets a neutral grey tint
+    g = out[63, 63]
+    assert abs(int(g[0]) - int(g[2])) < 10 and g[0] > 20
+    # selected zone E: white outer ring, dark inner ring
+    assert tuple(out[31, 40]) == (255, 255, 255)
+    assert tuple(out[35, 40]) == (36, 52, 71)

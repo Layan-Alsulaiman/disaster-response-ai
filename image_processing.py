@@ -32,10 +32,10 @@ NUM_CLASSES = len(CLASS_NAMES)
 # RGB colours for the overlay. Background is drawn fully transparent.
 CLASS_COLORS = {
     0: (0, 0, 0),         # Background (transparent)
-    1: (0, 200, 0),       # No Damage   - green
-    2: (255, 230, 0),     # Minor       - yellow
-    3: (255, 140, 0),     # Major       - orange
-    4: (230, 0, 0),       # Destroyed   - red
+    1: (64, 168, 104),    # No Damage   - green   #40A868
+    2: (238, 204, 64),    # Minor       - yellow  #EECC40
+    3: (226, 128, 44),    # Major       - orange  #E2802C
+    4: (190, 40, 36),     # Destroyed   - red     #BE2824
 }
 
 # --- Normalization from the model card ---
@@ -149,12 +149,14 @@ def draw_zone_grid(
     priority_colors: dict[str, tuple[int, int, int]],
     selected: str | None = None,
     fill_alpha: float = 0.38,
+    label=None,
 ) -> Image.Image:
     """Tint each zone by its priority and label it.
 
     `zones` are objects with .bbox (x0, y0, x1, y1), .letter, .priority and
     .score (None for Insufficient Data) - e.g. ranking.Zone. `selected` is a
-    zone letter or name to outline.
+    zone letter or name to outline. `label(zone) -> str` overrides the second
+    text line (default: "<priority> · <score>").
     """
     base = image.convert("RGBA")
     w, h = base.size
@@ -175,7 +177,10 @@ def draw_zone_grid(
         stroke = max(1, line // 2 + 1)
         d.text((cx, cy - small.size * 0.6), z.letter, font=big, anchor="mm",
                fill="white", stroke_width=stroke, stroke_fill="black")
-        sub = z.priority if z.score is None else f"{z.priority} · {z.score:.2f}"
+        if label is not None:
+            sub = label(z)
+        else:
+            sub = z.priority if z.score is None else f"{z.priority} · {z.score:.2f}"
         d.text((cx, cy + big.size * 0.55), sub, font=small, anchor="mm",
                fill="white", stroke_width=stroke, stroke_fill="black")
 
@@ -183,7 +188,10 @@ def draw_zone_grid(
         sel = next((z for z in zones if selected in (z.letter, getattr(z, "name", None))), None)
         if sel:
             x0, y0, x1, y1 = sel.bbox
-            d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 221, 0, 255), width=line * 3)
+            # white outer ring + dark inner ring stays visible on any imagery
+            d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 255, 255, 255), width=line * 4)
+            d.rectangle((x0 + line * 2, y0 + line * 2, x1 - 1 - line * 2, y1 - 1 - line * 2),
+                        outline=(36, 52, 71, 255), width=line * 2)
     return out.convert("RGB")
 
 
