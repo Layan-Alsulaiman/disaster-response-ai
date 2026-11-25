@@ -6,7 +6,7 @@ This repository contains a hackathon MVP for AI-powered disaster damage assessme
 
 The complete specification is located at:
 
-`docs/project-spec.md`
+`doc/project-spec`
 
 Read the complete specification before making architectural or implementation decisions.
 

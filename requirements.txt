@@ -1,0 +1,21 @@
+# Python 3.11+ recommended.
+# For a CPU-only PyTorch build (smaller download):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# AI model (Phase 1)
+torch>=2.2
+transformers>=4.46        # checkpoint config was saved with transformers 5.0.0
+huggingface_hub>=0.25
+safetensors>=0.4
+
+# Image / data processing
+pillow>=10.0
+numpy>=1.26
+
+# Dashboard (later phases)
+streamlit>=1.38
+pandas>=2.1
+plotly>=5.20
+
+# Tests
+pytest>=8.0
