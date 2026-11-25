@@ -138,6 +138,7 @@ evaluate.py          CLI: evaluation on local labelled cases
 tests/               pytest suite
 data/samples/        Local disaster cases (add your own xBD tiles)
 .streamlit/          Dark theme (colour palette)
+assets/logo.svg      App logo (original artwork)
 ```
 
 ## Model

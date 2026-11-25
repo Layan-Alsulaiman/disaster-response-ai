@@ -19,6 +19,7 @@ import hashlib
 import html
 import io
 import math
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -32,6 +33,7 @@ from image_processing import CLASS_COLORS, CLASS_NAMES, crop_box, draw_zone_grid
 
 MODEL_REPO = "BiliSakura/xBD-post-bda-models-transformers"
 MODEL_CHECKPOINT = "segformer-b0/xbd-baseline/best"
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "logo.svg"
 
 st.set_page_config(page_title="Disaster Damage Intelligence", page_icon=":material/satellite_alt:",
                    layout="wide", initial_sidebar_state="collapsed")
@@ -101,15 +103,18 @@ st.markdown(
 
   /* ---------- header ---------- */
   .hero {{position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center;
-          gap: 24px; padding: 18px 26px 20px; border-radius: 16px; border: 1px solid {BORDER};
+          gap: 24px; padding: 16px 24px 18px 18px; border-radius: 16px; border: 1px solid {BORDER};
           background: linear-gradient(115deg, #1C2640 0%, #172033 48%, #2A1A27 100%);
           box-shadow: 0 18px 40px -28px rgba(0,0,0,.8);}}
   .hero::after {{content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {TRI};}}
-  .hero .eyebrow {{font-size: .7rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
-                   color: {CORAL}; margin-bottom: 4px;}}
-  .hero h1 {{font-size: 1.75rem; font-weight: 800; letter-spacing: -.01em; color: {TEXT}; margin: 0; padding: 0;
-             line-height: 1.15;}}
-  .hero p {{color: {MUTED}; margin: 4px 0 0; font-size: .92rem;}}
+  .brand {{display: flex; align-items: center; gap: 16px; min-width: 0;}}
+  .brand img {{width: 54px; height: 54px; flex: none; border-radius: 15px;
+               filter: drop-shadow(0 6px 16px rgba(124,107,224,.35)) drop-shadow(0 0 10px rgba(240,100,100,.15));}}
+  .hero h1 {{font-size: 1.65rem; font-weight: 800; letter-spacing: -.015em; color: {TEXT}; margin: 0; padding: 0;
+             line-height: 1.1;}}
+  .hero .tagline {{font-size: .7rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+                   margin-top: 6px; background: {TRI}; -webkit-background-clip: text; background-clip: text;
+                   color: transparent; width: fit-content;}}
   .hero .case {{text-align: right; min-width: 0;}}
   .hero .case .name {{font-size: 1.12rem; font-weight: 700; color: {TEXT}; margin-bottom: 6px;
                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px;}}
@@ -139,7 +144,7 @@ st.markdown(
       box-shadow: 0 14px 34px -24px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.03);}}
 
   .kpi {{position: relative; overflow: hidden; background: linear-gradient(160deg, #1F2A42 0%, {SURFACE} 70%);
-         border: 1px solid {BORDER}; border-radius: 14px; padding: 14px 18px 14px; min-height: 104px;}}
+         border: 1px solid {BORDER}; border-radius: 14px; padding: 14px 18px 14px; min-height: 96px;}}
   .kpi::before {{content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--acc);}}
   .kpi::after {{content: ""; position: absolute; right: -40px; top: -40px; width: 130px; height: 130px;
                 background: radial-gradient(circle, var(--glow), transparent 70%);}}
@@ -233,8 +238,9 @@ def kpi(lab: str, value: str, sub: str, acc: str, tip: str = "", side: str = "",
     lab_html = f'<span class="tip" title="{esc(tip)}">{lab}</span>' if tip else lab
     return (f'<div class="kpi" style="--acc:{acc};--glow:{rgba(acc, .16)}">'
             f'<div class="k-label">{lab_html}</div>'
-            f'<div class="k-row"><div><div class="k-value">{value}</div><div class="k-sub">{sub}</div></div>'
-            f'{side}</div>{extra}</div>')
+            f'<div class="k-row"><div><div class="k-value">{value}</div>'
+            + (f'<div class="k-sub">{sub}</div>' if sub else "")
+            + f'</div>{side}</div>{extra}</div>')
 
 
 def damage_legend() -> str:
@@ -293,6 +299,15 @@ def run_inference(post_bytes: bytes) -> dict:
 @st.cache_data(show_spinner=False, max_entries=8)
 def decode(data: bytes) -> Image.Image:
     return load_rgb_image(io.BytesIO(data))
+
+
+@st.cache_data(show_spinner=False)
+def logo_img() -> str:
+    try:
+        data = base64.b64encode(LOGO_PATH.read_bytes()).decode()
+    except OSError:
+        return ""
+    return f'<img src="data:image/svg+xml;base64,{data}" alt="">'
 
 
 def to_data_uri(img: Image.Image, max_side: int = 1200) -> str:
@@ -354,9 +369,8 @@ else:
                  'No active assessment</span></div>')
 
 st.markdown(
-    f'<div class="hero"><div><div class="eyebrow">Geospatial damage intelligence</div>'
-    f'<h1>Disaster Damage Intelligence</h1>'
-    f'<p>AI building-damage detection from satellite imagery, ranked into response zones.</p></div>'
+    f'<div class="hero"><div class="brand">{logo_img()}<div><h1>Disaster Damage Intelligence</h1>'
+    f'<div class="tagline">Satellite assessment · Response prioritization</div></div></div>'
     f'{case_html}</div>',
     unsafe_allow_html=True,
 )
@@ -431,11 +445,10 @@ def view_new() -> None:
                 key_suffix = case.case_id
             else:
                 if not cases:
-                    st.caption("No saved cases were found. Upload images here, or add cases to "
-                               "`data/samples/` (see the README).")
-                post_file = st.file_uploader("After the disaster (required: this image is analyzed)",
+                    st.caption("No saved cases found in `data/samples/`.")
+                post_file = st.file_uploader("After-disaster image",
                                              type=["png", "jpg", "jpeg", "tif", "tiff"])
-                pre_file = st.file_uploader("Before the disaster (optional: for visual comparison)",
+                pre_file = st.file_uploader("Before-disaster image (optional)",
                                             type=["png", "jpg", "jpeg", "tif", "tiff"])
                 post_bytes = post_file.getvalue() if post_file else None
                 pre_bytes = pre_file.getvalue() if pre_file else None
@@ -608,11 +621,11 @@ def kpi_row(result: rk.RankingResult, stats: dict, scored: list) -> None:
                       "Zones whose severity reached the high-priority level.",
                       side=f'<div class="mini-grid">{mini}</div>'), unsafe_allow_html=True)
     k[1].markdown(kpi("Damaged building area", pct(stats["damaged_share"]) if scored else "—",
-                      "of detected building area shows damage", AMBER,
+                      "", AMBER,
                       "Share of the building area detected by the AI that shows minor damage, major damage or "
                       "destruction. This is an area share, not a count of buildings.",
                       extra=composition(shares, rows=False) if scored else ""), unsafe_allow_html=True)
-    k[2].markdown(kpi("Severe damage", pct(severe) if scored else "—", "major damage or destroyed", CORAL,
+    k[2].markdown(kpi("Severe damage", pct(severe) if scored else "—", "", CORAL,
                       "Share of the detected building area classified as major damage or destroyed.",
                       extra=f'<div class="meter"><div style="width:{100 * severe:.1f}%;background:{CORAL}">'
                             f'</div></div>' if scored else ""), unsafe_allow_html=True)
@@ -655,9 +668,7 @@ def view_overview(a: dict, result: rk.RankingResult) -> None:
             st.plotly_chart(priority_map_figure(base, result), config=CHART_CONFIG,
                             on_select="rerun", selection_mode="points", key="priority_map")
             legend = damage_legend() if layer == "Damage detection" else priority_legend()
-            st.markdown(f'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">'
-                        f'<div>{legend}</div><div class="muted" style="margin-top:4px">Click a zone to inspect it · '
-                        f'zones are image sections, not surveyed areas</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div>{legend}</div>', unsafe_allow_html=True)
 
     with side_col:
         with st.container(key="card_rank"):
@@ -686,7 +697,7 @@ def view_overview(a: dict, result: rk.RankingResult) -> None:
                 f'<div class="muted" style="margin:4px 0 10px">{sev}</div>'
                 f'<div style="font-size:.92rem;line-height:1.5;color:#E2E8F0;margin-bottom:6px">'
                 f'{esc(rk.zone_insight(zone))}</div>'
-                + (composition(zone_shares(zone), rows=False) + damage_legend() if zone.score is not None else ""),
+                + (composition(zone_shares(zone), rows=False) if zone.score is not None else ""),
                 unsafe_allow_html=True,
             )
             st.button("Inspect zone in detail", key="inspect", icon=":material/zoom_in:", on_click=inspect_zone,
@@ -698,10 +709,7 @@ def view_overview(a: dict, result: rk.RankingResult) -> None:
         with s1:
             st.markdown(label("Key findings", CORAL)
                         + f'<div style="font-size:1.02rem;line-height:1.6;color:{TEXT}">'
-                          f'{esc(rk.plain_summary(result))}</div>'
-                          '<div class="muted" style="margin-top:8px">AI-assisted estimate from satellite imagery '
-                          'for decision support, not a verified field assessment. It does not estimate casualties '
-                          'or population exposure.</div>', unsafe_allow_html=True)
+                          f'{esc(rk.plain_summary(result))}</div>', unsafe_allow_html=True)
         with s2:
             st.markdown(label("Export", TEAL), unsafe_allow_html=True)
             export_buttons(a, result, post_img)
@@ -843,8 +851,8 @@ def view_detail(a: dict, result: rk.RankingResult) -> None:
                     shares = {1: stats["no_damage_share"], 2: stats["minor_share"], 3: stats["major_share"],
                               4: stats["destroyed_share"]}
                     st.markdown(composition(shares) +
-                                f'<div class="muted" style="margin-top:10px">Shares of the detected building '
-                                f'area. Buildings cover about {pct(stats["building_coverage"])} of the image.</div>',
+                                f'<div class="muted" style="margin-top:10px">Buildings cover about '
+                                f'{pct(stats["building_coverage"])} of the image.</div>',
                                 unsafe_allow_html=True)
                 else:
                     st.markdown('<div class="muted">No buildings were detected in this image.</div>',
@@ -887,8 +895,7 @@ def technical_details(a: dict, result: rk.RankingResult) -> None:
         st.write("")
         with st.container(key="card_accuracy"):
             st.markdown(label("Accuracy check against reference annotations", CORAL), unsafe_allow_html=True)
-            st.caption("Compares the AI result with the dataset's human annotations for this image. The "
-                       "annotations are used only for this check, never as results.")
+            st.caption("Reference annotations are used only for this check, never as results.")
             if st.toggle("Compute accuracy metrics"):
                 from evaluation import evaluate_prediction
 
@@ -930,6 +937,5 @@ else:
     else:
         view_detail(assessment, ranking)
 
-st.markdown('<div class="footer">AI-assisted damage assessment for decision support. Results are estimates from '
-            'satellite imagery, not verified field assessments. Percentages describe detected building area, '
-            'not numbers of buildings.</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">AI-assisted estimates for decision support, not verified field assessments. '
+            'Percentages refer to detected building area, not building counts.</div>', unsafe_allow_html=True)
