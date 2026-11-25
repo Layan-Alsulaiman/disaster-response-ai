@@ -1,9 +1,9 @@
-"""Disaster Response Intelligence: Streamlit front end.
+"""Disaster Damage Intelligence: Streamlit front end (dark command-center theme).
 
-Three views:
+Three views, switched from the navigation bar under the header:
   * New Assessment       choose a case or upload imagery, run the AI assessment
-  * Response Overview    priority map, ranked zones, key indicators, summary, exports
-  * Detailed Analysis    large before/after imagery, damage overlay, breakdowns, zone close-ups
+  * Response Overview    key indicators, interactive priority map, ranked zones, findings, exports
+  * Detailed Analysis    tabs: before/after imagery, zone close-up, damage breakdown, technical details
 
 Run with:  streamlit run app.py
 
@@ -33,14 +33,17 @@ from image_processing import CLASS_COLORS, CLASS_NAMES, crop_box, draw_zone_grid
 MODEL_REPO = "BiliSakura/xBD-post-bda-models-transformers"
 MODEL_CHECKPOINT = "segformer-b0/xbd-baseline/best"
 
-st.set_page_config(page_title="Disaster Response Intelligence", layout="wide",
-                   initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Disaster Damage Intelligence", page_icon=":material/satellite_alt:",
+                   layout="wide", initial_sidebar_state="collapsed")
 
 # ---------------------------------------------------------------------------
 # Design tokens
 # ---------------------------------------------------------------------------
 
-INK, MUTED, LINE, SURFACE, SUBTLE = "#243447", "#6B7787", "#E3E7ED", "#FFFFFF", "#EEF1F5"
+BG, SURFACE, RAISED = "#0F1420", "#192131", "#1F2940"
+TEXT, MUTED, BORDER = "#F1F5F9", "#94A3B8", "rgba(148,163,184,.14)"
+CORAL, AMBER, TEAL, SLATE = "#F06464", "#E9B44C", "#45B8A0", "#64748B"
+TRI = f"linear-gradient(90deg, {CORAL} 0%, {AMBER} 50%, {TEAL} 100%)"
 
 
 def hexc(rgb) -> str:
@@ -53,18 +56,21 @@ def rgba(hex_color: str, alpha: float) -> str:
 
 
 PRIORITY_HEX = {p: hexc(c) for p, c in rk.PRIORITY_COLORS.items()}
-PRIORITY_TEXT = {rk.HIGH: "#9E3427", rk.MEDIUM: "#87591A", rk.LOW: "#2A6459", rk.INSUFFICIENT: "#5B6270"}
+PRIORITY_TEXT = {rk.HIGH: CORAL, rk.MEDIUM: AMBER, rk.LOW: TEAL, rk.INSUFFICIENT: "#A5B1C2"}
 PRIORITY_LABEL = {rk.HIGH: "High priority", rk.MEDIUM: "Medium priority", rk.LOW: "Low priority",
                   rk.INSUFFICIENT: "No buildings detected"}
 CLASS_HEX = {c: hexc(CLASS_COLORS[c]) for c in range(1, 5)}
 DAMAGE_LABEL = {1: "No visible damage", 2: "Minor damage", 3: "Major damage", 4: "Destroyed"}
 
-VIEWS = [("new", "New Assessment"), ("overview", "Response Overview"), ("detail", "Detailed Analysis")]
+VIEWS = [("new", "New Assessment", ":material/add_photo_alternate:"),
+         ("overview", "Response Overview", ":material/radar:"),
+         ("detail", "Detailed Analysis", ":material/query_stats:")]
+MAP_LAYERS = ["Priority zones", "Damage detection", "Satellite only"]
 
 CHART_LAYOUT = dict(
-    template="plotly_white", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color=INK, size=13), margin=dict(l=8, r=8, t=8, b=8),
-    hoverlabel=dict(bgcolor=SURFACE, bordercolor=LINE, font=dict(color=INK, size=13)),
+    template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color=TEXT, size=13), margin=dict(l=8, r=8, t=8, b=8),
+    hoverlabel=dict(bgcolor=SURFACE, bordercolor="#334155", font=dict(color=TEXT, size=13)),
 )
 CHART_CONFIG = {"displayModeBar": False, "scrollZoom": False}
 
@@ -83,67 +89,126 @@ if ss.view != "new" and ss.assessment is None:
 # ---------------------------------------------------------------------------
 
 st.markdown(
-    """
+    f"""
 <style>
-  #MainMenu, footer {visibility: hidden;}
-  header[data-testid="stHeader"] {background: transparent;}
-  .block-container {padding-top: 1.4rem; padding-bottom: 1.5rem; max-width: 1480px;}
+  #MainMenu, footer {{visibility: hidden;}}
+  header[data-testid="stHeader"] {{background: transparent;}}
+  .stApp {{background:
+      radial-gradient(1100px 520px at 0% -8%, rgba(240,100,100,.07), transparent 60%),
+      radial-gradient(900px 480px at 100% -6%, rgba(69,184,160,.07), transparent 60%),
+      {BG};}}
+  .block-container {{padding-top: 1.1rem; padding-bottom: 1.2rem; max-width: 1600px;}}
 
-  /* top bar */
-  .brand {font-weight: 700; font-size: 1.08rem; color: #243447; line-height: 1.25;}
-  .brand small {display: block; font-weight: 500; color: #6B7787; font-size: .78rem; letter-spacing: .01em;}
-  [class*="st-key-nav_"] button {background: transparent; border: none; border-bottom: 2px solid transparent;
-      border-radius: 0; color: #6B7787; font-weight: 600; box-shadow: none; padding: 6px 4px;}
-  [class*="st-key-nav_"] button:hover {color: #243447; background: transparent; border-bottom-color: #C9D0DA;}
-  [class*="st-key-nav_"] button:focus:not(:active) {color: #243447; background: transparent; box-shadow: none;}
-  [class*="st-key-nav_"] button:disabled {color: #B8C0CC; background: transparent;}
-  .rule {border-bottom: 1px solid #E3E7ED; margin: 0 0 20px;}
+  /* ---------- header ---------- */
+  .hero {{position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center;
+          gap: 24px; padding: 18px 26px 20px; border-radius: 16px; border: 1px solid {BORDER};
+          background: linear-gradient(115deg, #1C2640 0%, #172033 48%, #2A1A27 100%);
+          box-shadow: 0 18px 40px -28px rgba(0,0,0,.8);}}
+  .hero::after {{content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {TRI};}}
+  .hero .eyebrow {{font-size: .7rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+                   color: {CORAL}; margin-bottom: 4px;}}
+  .hero h1 {{font-size: 1.75rem; font-weight: 800; letter-spacing: -.01em; color: {TEXT}; margin: 0; padding: 0;
+             line-height: 1.15;}}
+  .hero p {{color: {MUTED}; margin: 4px 0 0; font-size: .92rem;}}
+  .hero .case {{text-align: right; min-width: 0;}}
+  .hero .case .name {{font-size: 1.12rem; font-weight: 700; color: {TEXT}; margin-bottom: 6px;
+                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px;}}
+  .chip-s {{display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; margin-left: 6px;
+            border-radius: 999px; background: rgba(148,163,184,.10); border: 1px solid rgba(148,163,184,.18);
+            font-size: .76rem; color: #CBD5E1; white-space: nowrap;}}
+  .dot {{width: 7px; height: 7px; border-radius: 50%; display: inline-block;}}
 
-  /* typography */
-  .view-title {font-size: 1.55rem; font-weight: 700; color: #243447; margin: 0; line-height: 1.25;}
-  .view-sub {color: #6B7787; font-size: .92rem; margin: 4px 0 18px;}
-  .label-sm {font-size: .74rem; font-weight: 700; color: #6B7787; text-transform: uppercase;
-             letter-spacing: .07em; margin: 0 0 8px;}
-  .muted {color: #6B7787; font-size: .84rem;}
-  .tip {border-bottom: 1px dotted #9CA3AF; cursor: help;}
+  /* ---------- navigation ---------- */
+  [class*="st-key-nav_"] button {{background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px;
+      color: {MUTED}; font-weight: 600; min-height: 44px; transition: all .15s ease;}}
+  [class*="st-key-nav_"] button:hover {{color: {TEXT}; border-color: rgba(148,163,184,.35); background: {RAISED};}}
+  [class*="st-key-nav_"] button:disabled {{opacity: .4;}}
 
-  /* cards: keyed containers (st-key-card_*) and HTML cards share one look */
-  [class*="st-key-card_"], .card {background: #FFFFFF; border: 1px solid #E3E7ED; border-radius: 12px;
-      padding: 18px 20px; box-shadow: 0 1px 2px rgba(36,52,71,.05);}
-  .kpi {background: #FFFFFF; border: 1px solid #E3E7ED; border-radius: 12px; padding: 14px 18px;
-        box-shadow: 0 1px 2px rgba(36,52,71,.05);}
-  .kpi .k-label {font-size: .74rem; font-weight: 700; color: #6B7787; text-transform: uppercase; letter-spacing: .06em;}
-  .kpi .k-value {font-size: 1.7rem; font-weight: 700; color: #243447; line-height: 1.3;}
-  .kpi .k-sub {font-size: .82rem; color: #6B7787;}
+  /* ---------- typography ---------- */
+  .label-sm {{font-size: .72rem; font-weight: 700; color: {MUTED}; text-transform: uppercase; letter-spacing: .1em;
+              margin: 0 0 10px; display: flex; align-items: center;}}
+  .label-sm::before {{content: ""; width: 3px; height: 13px; border-radius: 2px; margin-right: 9px;
+                      background: var(--acc, {CORAL});}}
+  .muted {{color: {MUTED}; font-size: .84rem;}}
+  .tip {{border-bottom: 1px dotted #64748B; cursor: help;}}
+  .num {{font-variant-numeric: tabular-nums;}}
 
-  /* priority pills and chips */
-  .pill {display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600;
-         vertical-align: middle;}
-  .chip {display: inline-flex; align-items: center; margin: 6px 16px 0 0; font-size: .82rem; color: #243447;}
-  .chip i {width: 11px; height: 11px; border-radius: 3px; margin-right: 7px; display: inline-block;}
-  .tag {display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600;
-        background: #EEF1F5; color: #243447; margin-right: 6px;}
+  /* ---------- cards ---------- */
+  [class*="st-key-card_"], .card {{background: linear-gradient(180deg, #1C2538 0%, {SURFACE} 100%);
+      border: 1px solid {BORDER}; border-radius: 14px; padding: 16px 18px;
+      box-shadow: 0 14px 34px -24px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.03);}}
 
-  /* composition bar */
-  .cbar {display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #EEF1F5; margin: 6px 0 2px;}
-  .cbar div {height: 100%;}
-  .crow {display: flex; justify-content: space-between; font-size: .86rem; padding: 5px 0;
-         border-bottom: 1px solid #F0F2F5;}
-  .crow:last-child {border-bottom: none;}
-  .crow span i {width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 8px;}
+  .kpi {{position: relative; overflow: hidden; background: linear-gradient(160deg, #1F2A42 0%, {SURFACE} 70%);
+         border: 1px solid {BORDER}; border-radius: 14px; padding: 14px 18px 14px; min-height: 104px;}}
+  .kpi::before {{content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--acc);}}
+  .kpi::after {{content: ""; position: absolute; right: -40px; top: -40px; width: 130px; height: 130px;
+                background: radial-gradient(circle, var(--glow), transparent 70%);}}
+  .kpi .k-label {{font-size: .7rem; font-weight: 700; color: {MUTED}; text-transform: uppercase; letter-spacing: .1em;}}
+  .kpi .k-row {{display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;}}
+  .kpi .k-value {{font-size: 2rem; font-weight: 800; color: {TEXT}; line-height: 1.2; font-variant-numeric: tabular-nums;}}
+  .kpi .k-value small {{font-size: .95rem; color: {MUTED}; font-weight: 600; margin-left: 4px;}}
+  .kpi .k-sub {{font-size: .8rem; color: {MUTED}; margin-top: 2px;}}
+  .mini-grid {{display: grid; grid-template-columns: repeat(3, 12px); gap: 3px; margin-bottom: 4px;}}
+  .mini-grid i {{width: 12px; height: 12px; border-radius: 3px; display: block;}}
+  .meter {{height: 6px; border-radius: 4px; background: rgba(148,163,184,.15); overflow: hidden; margin-top: 8px;}}
+  .meter div {{height: 100%; border-radius: 4px;}}
 
-  /* buttons */
-  .stButton button, .stDownloadButton button {border-radius: 8px; font-weight: 600;}
-  [class*="st-key-zbtn_"] button {justify-content: flex-start; text-align: left; background: #FFFFFF;
-      border: 1px solid #E3E7ED; border-left-width: 5px; border-radius: 8px; padding: 7px 12px; min-height: 0;}
-  [class*="st-key-zbtn_"] button:hover {background: #F7F8FA; border-color: #C9D0DA;}
-  [class*="st-key-zbtn_"] button p {font-size: .9rem;}
+  /* ---------- pills, legends, bars ---------- */
+  .pill {{display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .76rem; font-weight: 700;
+          vertical-align: middle; letter-spacing: .01em;}}
+  .chip {{display: inline-flex; align-items: center; margin: 4px 16px 0 0; font-size: .8rem; color: #CBD5E1;}}
+  .chip i {{width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; display: inline-block;}}
+  .cbar {{display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: rgba(148,163,184,.15);
+          margin: 6px 0 4px;}}
+  .cbar div {{height: 100%;}}
+  .crow {{display: flex; justify-content: space-between; font-size: .86rem; padding: 6px 0; color: #CBD5E1;
+          border-bottom: 1px solid rgba(148,163,184,.08);}}
+  .crow:last-child {{border-bottom: none;}}
+  .crow b {{color: {TEXT}; font-variant-numeric: tabular-nums;}}
+  .crow span i {{width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 8px;}}
 
-  /* imagery */
-  [data-testid="stImage"] img {border-radius: 10px;}
-  [data-testid="stImageCaption"], [data-testid="caption"] {color: #6B7787;}
+  /* ---------- buttons ---------- */
+  .stButton button, .stDownloadButton button {{border-radius: 10px; font-weight: 600;}}
+  .st-key-run button {{width: 100%; min-height: 52px; border: none; color: #10151F; font-weight: 800;
+      font-size: 1.02rem; letter-spacing: .01em; background: linear-gradient(135deg, {CORAL} 0%, {AMBER} 100%);
+      box-shadow: 0 12px 30px -12px rgba(240,100,100,.65);}}
+  .st-key-run button:hover {{filter: brightness(1.07); color: #10151F; border: none;}}
+  .st-key-run button:disabled {{background: {RAISED}; color: {MUTED}; box-shadow: none;}}
+  [class*="st-key-zbtn_"] button {{justify-content: flex-start; text-align: left; background: #1B2436;
+      border: 1px solid {BORDER}; border-left: 4px solid {SLATE}; border-radius: 10px; padding: 7px 12px;
+      min-height: 0; color: #E2E8F0;}}
+  [class*="st-key-zbtn_"] button:hover {{background: {RAISED}; color: {TEXT};}}
+  [class*="st-key-zbtn_"] button p {{font-size: .9rem;}}
+  [class*="st-key-dl_"] button, .st-key-inspect button {{width: 100%; background: {RAISED};
+      border: 1px solid rgba(148,163,184,.22);}}
 
-  .footer {color: #8A94A3; font-size: .78rem; border-top: 1px solid #E3E7ED; margin-top: 28px; padding-top: 10px;}
+  /* ---------- tabs ---------- */
+  .stTabs [data-baseweb="tab-list"] {{gap: 6px; border-bottom: 1px solid {BORDER};}}
+  .stTabs [data-baseweb="tab"] {{background: {SURFACE}; border: 1px solid {BORDER}; border-bottom: none;
+      border-radius: 10px 10px 0 0; padding: 8px 18px; color: {MUTED}; font-weight: 600;}}
+  .stTabs [aria-selected="true"] {{background: {RAISED}; color: {TEXT};}}
+  .stTabs [data-baseweb="tab-highlight"] {{background: {TRI}; height: 3px;}}
+  .stTabs [data-baseweb="tab-border"] {{display: none;}}
+
+  /* ---------- imagery ---------- */
+  [data-testid="stImage"] img {{border-radius: 12px; border: 1px solid {BORDER};}}
+  .frame-label {{font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+                 color: {MUTED}; margin: 0 0 6px; display: flex; align-items: center; gap: 8px;}}
+  .placeholder {{background: repeating-linear-gradient(45deg, #151C2B, #151C2B 10px, #182032 10px, #182032 20px);
+                 border: 1px dashed rgba(148,163,184,.25); border-radius: 12px; height: 330px; display: flex;
+                 align-items: center; justify-content: center; text-align: center; color: {MUTED};
+                 font-size: .85rem; padding: 16px;}}
+  .step {{position: relative; background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
+          padding: 12px 14px 12px 56px; min-height: 74px;}}
+  .step .n {{position: absolute; left: 14px; top: 13px; width: 30px; height: 30px; border-radius: 9px;
+             display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .9rem;
+             color: var(--acc); background: var(--glow); border: 1px solid var(--acc);}}
+  .step b {{color: {TEXT}; font-size: .92rem;}}
+  .step div {{color: {MUTED}; font-size: .8rem; margin-top: 2px; line-height: 1.35;}}
+
+  .footer {{position: relative; color: #7C8AA0; font-size: .76rem; margin-top: 22px; padding-top: 12px;}}
+  .footer::before {{content: ""; position: absolute; left: 0; top: 0; width: 120px; height: 2px; background: {TRI};
+                    border-radius: 2px;}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -162,15 +227,22 @@ def pct(x: float) -> str:
     return f"{100 * x:.0f}%"
 
 
+def label(text: str, acc: str = CORAL) -> str:
+    return f'<div class="label-sm" style="--acc:{acc}">{text}</div>'
+
+
 def pill(priority: str) -> str:
-    return (f'<span class="pill" style="background:{rgba(PRIORITY_HEX[priority], .16)};'
-            f'color:{PRIORITY_TEXT[priority]}">{PRIORITY_LABEL[priority]}</span>')
+    c = PRIORITY_HEX[priority]
+    return (f'<span class="pill" style="background:{rgba(c, .15)};color:{PRIORITY_TEXT[priority]};'
+            f'border:1px solid {rgba(c, .4)}">{PRIORITY_LABEL[priority]}</span>')
 
 
-def kpi(label: str, value: str, sub: str = "", tip: str = "") -> str:
-    lab = f'<span class="tip" title="{esc(tip)}">{label}</span>' if tip else label
-    return (f'<div class="kpi"><div class="k-label">{lab}</div><div class="k-value">{value}</div>'
-            f'<div class="k-sub">{sub}</div></div>')
+def kpi(lab: str, value: str, sub: str, acc: str, tip: str = "", side: str = "", extra: str = "") -> str:
+    lab_html = f'<span class="tip" title="{esc(tip)}">{lab}</span>' if tip else lab
+    return (f'<div class="kpi" style="--acc:{acc};--glow:{rgba(acc, .16)}">'
+            f'<div class="k-label">{lab_html}</div>'
+            f'<div class="k-row"><div><div class="k-value">{value}</div><div class="k-sub">{sub}</div></div>'
+            f'{side}</div>{extra}</div>')
 
 
 def damage_legend() -> str:
@@ -184,7 +256,7 @@ def priority_legend() -> str:
 
 
 def composition(shares: dict[int, float], rows: bool = True) -> str:
-    """Stacked bar of damage classes (shares of building area) plus a labelled breakdown."""
+    """Stacked bar of damage classes (shares of building area), optionally with a labelled breakdown."""
     bar = "".join(f'<div style="width:{100 * shares[c]:.3f}%;background:{CLASS_HEX[c]}" '
                   f'title="{DAMAGE_LABEL[c]}: {pct(shares[c])}"></div>' for c in range(1, 5))
     out = f'<div class="cbar">{bar}</div>'
@@ -231,11 +303,11 @@ def decode(data: bytes) -> Image.Image:
     return load_rgb_image(io.BytesIO(data))
 
 
-def to_data_uri(img: Image.Image, max_side: int = 1100) -> str:
+def to_data_uri(img: Image.Image, max_side: int = 1200) -> str:
     img = img.copy()
     img.thumbnail((max_side, max_side))
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=88)
+    img.save(buf, format="JPEG", quality=90)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -244,6 +316,10 @@ def enlarge(img: Image.Image, target: int = 900) -> Image.Image:
     w, h = img.size
     scale = target / max(w, h)
     return img.resize((round(w * scale), round(h * scale)), Image.LANCZOS) if scale > 1 else img
+
+
+def zone_label(z) -> str:
+    return "No buildings" if z.score is None else f"{z.priority} · {z.score:.1f}"
 
 
 # ---------------------------------------------------------------------------
@@ -270,21 +346,40 @@ def reset_thresholds() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Top bar: brand, navigation, advanced settings
+# Header and navigation
 # ---------------------------------------------------------------------------
 
 has_result = ss.assessment is not None
-brand_col, nav_col, adv_col = st.columns([2.4, 5, 1.6], vertical_alignment="center")
-brand_col.markdown('<div class="brand">Disaster Response Intelligence'
-                   '<small>AI-assisted building damage assessment</small></div>', unsafe_allow_html=True)
-with nav_col:
-    for col, (key, label) in zip(st.columns(3), VIEWS):
-        col.button(label, key=f"nav_{key}", on_click=go_to, args=(key,),
-                   disabled=key != "new" and not has_result)
-css(f".st-key-nav_{ss.view} button {{color: {INK}; border-bottom-color: {INK};}}")
+if has_result:
+    a0 = ss.assessment
+    chips = f'<span class="chip-s"><span class="dot" style="background:{AMBER}"></span>{esc(a0["type"])}</span>'
+    if a0.get("date"):
+        chips += f'<span class="chip-s">Captured {esc(a0["date"])}</span>'
+    chips += f'<span class="chip-s"><span class="dot" style="background:{TEAL}"></span>AI analysis complete</span>'
+    case_html = (f'<div class="case"><div class="name">{esc(a0["name"])}</div>{chips}</div>')
+else:
+    case_html = ('<div class="case"><span class="chip-s"><span class="dot" style="background:#64748B"></span>'
+                 'No active assessment</span></div>')
 
-with adv_col:
-    with st.popover("Advanced settings"):
+st.markdown(
+    f'<div class="hero"><div><div class="eyebrow">Geospatial damage intelligence</div>'
+    f'<h1>Disaster Damage Intelligence</h1>'
+    f'<p>AI building-damage detection from satellite imagery, ranked into response zones.</p></div>'
+    f'{case_html}</div>',
+    unsafe_allow_html=True,
+)
+
+st.write("")
+nav_cols = st.columns([1, 1, 1, 0.12, 0.85], vertical_alignment="center")
+for col, (key, lab, icon) in zip(nav_cols[:3], VIEWS):
+    col.button(lab, key=f"nav_{key}", icon=icon, on_click=go_to, args=(key,),
+               disabled=key != "new" and not has_result)
+css(f""".st-key-nav_{ss.view} button {{color: {TEXT}; border-color: {rgba(CORAL, .55)};
+     background: linear-gradient(135deg, {rgba(CORAL, .20)} 0%, {rgba(AMBER, .10)} 100%);
+     box-shadow: 0 8px 22px -12px {rgba(CORAL, .7)};}}""")
+
+with nav_cols[4]:
+    with st.popover("Advanced settings", icon=":material/tune:"):
         st.markdown("**Priority levels**")
         st.slider("High priority from severity", 0.1, 5.0, step=0.1, key="thr_high",
                   help="Zones with a severity score at or above this value are high priority.")
@@ -306,11 +401,11 @@ except ValueError:
     thresholds = dict(rk.DEFAULT_THRESHOLDS)
     thresholds_note = "The medium level must be below the high level; default priority levels are in use."
 
-st.markdown('<div class="rule"></div>', unsafe_allow_html=True)
 if thresholds_note:
-    st.warning(thresholds_note)
+    st.warning(thresholds_note, icon=":material/warning:")
 if ss.pop("_toast", None):
-    st.toast("Assessment complete")
+    st.toast("Assessment complete", icon=":material/check_circle:")
+st.write("")
 
 
 # ---------------------------------------------------------------------------
@@ -318,29 +413,32 @@ if ss.pop("_toast", None):
 # ---------------------------------------------------------------------------
 
 
+def steps_strip() -> None:
+    steps = [
+        (CORAL, "1", "Select imagery", "Pick a saved disaster case or upload an after-disaster satellite image."),
+        (AMBER, "2", "AI detects damage", "The model classifies every building area as intact, minor, major "
+                                          "or destroyed."),
+        (TEAL, "3", "Prioritize zones", "The image is split into nine zones and ranked by damage severity."),
+    ]
+    cols = st.columns(3, gap="medium")
+    for col, (acc, n, title, text) in zip(cols, steps):
+        col.markdown(f'<div class="step" style="--acc:{acc};--glow:{rgba(acc, .14)}"><span class="n">{n}</span>'
+                     f'<b>{title}</b><div>{text}</div></div>', unsafe_allow_html=True)
+
+
 def view_new() -> None:
-    st.markdown('<div class="view-title">New assessment</div>'
-                '<div class="view-sub">Choose a disaster case or upload satellite images, then run the AI '
-                'damage assessment.</div>', unsafe_allow_html=True)
-
-    if has_result:
-        a = ss.assessment
-        c1, c2 = st.columns([4, 1], vertical_alignment="center")
-        c1.markdown(f'<div class="muted">Current assessment: <b>{esc(a["name"])}</b>. Starting a new one '
-                    f'replaces it.</div>', unsafe_allow_html=True)
-        c2.button("Back to results", on_click=go_to, args=("overview",))
-
     cases = dl.discover_cases()
-    left, right = st.columns([1, 1.3], gap="large")
+    left, right = st.columns([1, 1.45], gap="large")
 
     pre_bytes = post_bytes = None
     labels_path = None
     capture_date = ""
     with left:
         with st.container(key="card_setup"):
-            st.markdown('<div class="label-sm">Disaster details</div>', unsafe_allow_html=True)
+            st.markdown(label("Imagery source", CORAL), unsafe_allow_html=True)
             options = ["Existing case", "Upload images"] if cases else ["Upload images"]
-            source = st.radio("Imagery source", options, horizontal=True, label_visibility="collapsed")
+            source = st.segmented_control("Imagery source", options, default=options[0],
+                                          label_visibility="collapsed", key="source") or options[0]
 
             if source == "Existing case":
                 idx = st.selectbox("Disaster case", range(len(cases)),
@@ -354,27 +452,24 @@ def view_new() -> None:
                 key_suffix = case.case_id
             else:
                 if not cases:
-                    st.caption("No saved cases were found. Upload images below, or add cases to "
+                    st.caption("No saved cases were found. Upload images here, or add cases to "
                                "`data/samples/` (see the README).")
+                post_file = st.file_uploader("After the disaster (required: this image is analyzed)",
+                                             type=["png", "jpg", "jpeg", "tif", "tiff"])
+                pre_file = st.file_uploader("Before the disaster (optional: for visual comparison)",
+                                            type=["png", "jpg", "jpeg", "tif", "tiff"])
+                post_bytes = post_file.getvalue() if post_file else None
+                pre_bytes = pre_file.getvalue() if pre_file else None
                 default_name, default_type, key_suffix = "", "Other", "upload"
 
+            st.markdown(label("Disaster details", AMBER), unsafe_allow_html=True)
             types = list(dl.UPLOAD_DISASTER_TYPES)
             if default_type not in types:
                 default_type = "Other"
-            name = st.text_input("Disaster name", default_name, key=f"name_{key_suffix}",
+            n1, n2 = st.columns([1.5, 1])
+            name = n1.text_input("Disaster name", default_name, key=f"name_{key_suffix}",
                                  placeholder="e.g. Hurricane Michael, Panama City")
-            dtype = st.selectbox("Disaster type", types, index=types.index(default_type), key=f"type_{key_suffix}")
-
-            if source == "Upload images":
-                u1, u2 = st.columns(2)
-                post_file = u1.file_uploader("After the disaster (required)",
-                                             type=["png", "jpg", "jpeg", "tif", "tiff"],
-                                             help="This is the image the AI analyzes.")
-                pre_file = u2.file_uploader("Before the disaster (optional)",
-                                            type=["png", "jpg", "jpeg", "tif", "tiff"],
-                                            help="Shown for visual comparison only.")
-                post_bytes = post_file.getvalue() if post_file else None
-                pre_bytes = pre_file.getvalue() if pre_file else None
+            dtype = n2.selectbox("Disaster type", types, index=types.index(default_type), key=f"type_{key_suffix}")
 
     post_img = pre_img = None
     for raw, which in ((post_bytes, "after"), (pre_bytes, "before")):
@@ -383,7 +478,7 @@ def view_new() -> None:
         try:
             img = decode(raw)
         except Exception as exc:
-            show_error(f"The {which}-disaster image could not be read.", "Please upload a PNG, JPEG or TIFF image.",
+            show_error(f"The {which}-disaster image could not be read.", "Please use a PNG, JPEG or TIFF image.",
                        exc)
             img = None
         if which == "after":
@@ -391,31 +486,36 @@ def view_new() -> None:
         else:
             pre_img = img
 
+    with left:
+        st.write("")
+        run = st.button("Analyze with AI", type="primary", icon=":material/bolt:", disabled=post_img is None,
+                        key="run")
+        st.markdown('<div class="muted" style="text-align:center">The AI analyzes the after-disaster image. '
+                    'The before image is for comparison only.</div>', unsafe_allow_html=True)
+
     with right:
         with st.container(key="card_preview"):
-            st.markdown('<div class="label-sm">Image preview</div>', unsafe_allow_html=True)
-            if post_img is None and pre_img is None:
-                st.markdown('<div class="muted">Previews appear here once images are selected.</div>',
-                            unsafe_allow_html=True)
-            else:
-                p1, p2 = st.columns(2, gap="medium")
-                with p1:
-                    if pre_img is not None:
-                        st.image(pre_img, caption="Before (for comparison)")
-                    else:
-                        st.markdown('<div class="muted">No before-disaster image</div>', unsafe_allow_html=True)
-                with p2:
-                    if post_img is not None:
-                        st.image(post_img, caption="After (analyzed by the AI)")
-                    else:
-                        st.markdown('<div class="muted">An after-disaster image is required</div>',
-                                    unsafe_allow_html=True)
+            st.markdown(label("Imagery preview", TEAL), unsafe_allow_html=True)
+            p1, p2 = st.columns(2, gap="medium")
+            with p1:
+                st.markdown('<div class="frame-label"><span class="dot" style="background:#64748B"></span>'
+                            'Before · reference</div>', unsafe_allow_html=True)
+                if pre_img is not None:
+                    st.image(pre_img)
+                else:
+                    st.markdown('<div class="placeholder">No before-disaster image<br>(optional)</div>',
+                                unsafe_allow_html=True)
+            with p2:
+                st.markdown(f'<div class="frame-label"><span class="dot" style="background:{CORAL}"></span>'
+                            f'After · analyzed by AI</div>', unsafe_allow_html=True)
+                if post_img is not None:
+                    st.image(post_img)
+                else:
+                    st.markdown('<div class="placeholder">Select a case or upload an<br>after-disaster image</div>',
+                                unsafe_allow_html=True)
 
     st.write("")
-    b1, b2 = st.columns([1, 2.3], vertical_alignment="center")
-    run = b1.button("Analyze with AI", type="primary", disabled=post_img is None, key="run")
-    b2.markdown('<div class="muted">The AI examines the after-disaster image for visible building damage. '
-                'The before-disaster image is not analyzed.</div>', unsafe_allow_html=True)
+    steps_strip()
 
     if run and post_img is not None:
         try:
@@ -449,21 +549,8 @@ def view_new() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Shared result helpers
+# Priority map
 # ---------------------------------------------------------------------------
-
-
-def header(a: dict, subtitle: str) -> None:
-    tags = f'<span class="tag">{esc(a["type"])}</span>'
-    if a.get("date"):
-        tags += f'<span class="tag">Imagery captured {esc(a["date"])}</span>'
-    loc = ""
-    if a.get("location"):
-        lat, lon = a["location"]
-        loc = (f'<span class="muted tip" title="Average position of annotated buildings in the imagery '
-               f'metadata">{lat:.4f}°, {lon:.4f}°</span>')
-    st.markdown(f'<div class="view-title">{esc(a["name"])}</div>'
-                f'<div class="view-sub">{subtitle}&nbsp;&nbsp;{tags}{loc}</div>', unsafe_allow_html=True)
 
 
 def apply_map_selection(letters: list[str]) -> None:
@@ -490,12 +577,20 @@ def apply_map_selection(letters: list[str]) -> None:
         ss.zone = letter
 
 
-def priority_map_figure(post_img: Image.Image, result: rk.RankingResult, selected: str) -> go.Figure:
+def map_base(post_img: Image.Image, mask: np.ndarray, result: rk.RankingResult, selected: str, layer: str):
     grid = result.grid_order()
-    w, h = post_img.size
-    base = draw_zone_grid(post_img, grid, rk.PRIORITY_COLORS, selected=selected, fill_alpha=0.48,
-                          label=lambda z: "No buildings" if z.score is None else f"{z.priority} · {z.score:.1f}")
+    if layer == "Damage detection":
+        img, tint = overlay_mask(post_img, mask, alpha=0.6), 0.0
+    elif layer == "Satellite only":
+        img, tint = post_img, 0.0
+    else:
+        img, tint = post_img, 0.22
+    return draw_zone_grid(img, grid, rk.PRIORITY_COLORS, selected=selected, fill_alpha=tint, label=zone_label)
 
+
+def priority_map_figure(base: Image.Image, result: rk.RankingResult, height: int = 610) -> go.Figure:
+    grid = result.grid_order()
+    w, h = base.size
     fig = go.Figure()
     for z in grid:  # one invisible, clickable point grid per zone (trace index == grid position)
         x0, y0, x1, y1 = z.bbox
@@ -507,7 +602,7 @@ def priority_map_figure(post_img: Image.Image, result: rk.RankingResult, selecte
                       f"{pct(z.severe_share)} of building area with major damage or destroyed")
         fig.add_trace(go.Scatter(
             x=xs.ravel(), y=ys.ravel(), mode="markers", customdata=[z.letter] * xs.size,
-            marker=dict(size=46, color=INK, opacity=0), name=z.name, showlegend=False,
+            marker=dict(size=46, color=TEXT, opacity=0), name=z.name, showlegend=False,
             selected=dict(marker=dict(opacity=0)), unselected=dict(marker=dict(opacity=0)),
             hovertemplate=f"<b>{z.name}</b><br>{detail}<extra></extra>",
         ))
@@ -516,7 +611,7 @@ def priority_map_figure(post_img: Image.Image, result: rk.RankingResult, selecte
     fig.update_xaxes(visible=False, range=[0, w], fixedrange=True, constrain="domain")
     fig.update_yaxes(visible=False, range=[h, 0], fixedrange=True, scaleanchor="x", scaleratio=1,
                      constrain="domain")
-    fig.update_layout(**{**CHART_LAYOUT, "margin": dict(l=0, r=0, t=0, b=0)}, height=640, dragmode=False,
+    fig.update_layout(**{**CHART_LAYOUT, "margin": dict(l=0, r=0, t=0, b=0)}, height=height, dragmode=False,
                       hovermode="closest", clickmode="event+select")
     return fig
 
@@ -524,6 +619,34 @@ def priority_map_figure(post_img: Image.Image, result: rk.RankingResult, selecte
 # ---------------------------------------------------------------------------
 # View 2: Response Overview
 # ---------------------------------------------------------------------------
+
+
+def kpi_row(result: rk.RankingResult, stats: dict, scored: list) -> None:
+    top = scored[0] if scored else None
+    severe = stats["major_share"] + stats["destroyed_share"]
+    mini = "".join(f'<i style="background:{PRIORITY_HEX[z.priority]};opacity:{1 if z.score is not None else .45}" '
+                   f'title="{z.name}: {PRIORITY_LABEL[z.priority]}"></i>' for z in result.grid_order())
+    shares = {1: stats["no_damage_share"], 2: stats["minor_share"], 3: stats["major_share"],
+              4: stats["destroyed_share"]}
+    k = st.columns(4, gap="medium")
+    k[0].markdown(kpi("High-priority zones", f'{result.count(rk.HIGH)}<small>/ {len(result.zones)}</small>',
+                      f"{result.count(rk.MEDIUM)} medium · {result.count(rk.LOW)} low", CORAL,
+                      "Zones whose severity reached the high-priority level.",
+                      side=f'<div class="mini-grid">{mini}</div>'), unsafe_allow_html=True)
+    k[1].markdown(kpi("Damaged building area", pct(stats["damaged_share"]) if scored else "—",
+                      "of detected building area shows damage", AMBER,
+                      "Share of the building area detected by the AI that shows minor damage, major damage or "
+                      "destruction. This is an area share, not a count of buildings.",
+                      extra=composition(shares, rows=False) if scored else ""), unsafe_allow_html=True)
+    k[2].markdown(kpi("Severe damage", pct(severe) if scored else "—", "major damage or destroyed", CORAL,
+                      "Share of the detected building area classified as major damage or destroyed.",
+                      extra=f'<div class="meter"><div style="width:{100 * severe:.1f}%;background:{CORAL}">'
+                            f'</div></div>' if scored else ""), unsafe_allow_html=True)
+    acc = PRIORITY_HEX[top.priority] if top else SLATE
+    k[3].markdown(kpi("Most affected zone", top.name if top else "—",
+                      f"severity {top.score:.1f} / 5" if top else "no buildings detected", acc,
+                      "The zone with the highest severity score.",
+                      side=pill(top.priority) if top else ""), unsafe_allow_html=True)
 
 
 def view_overview(a: dict, result: rk.RankingResult) -> None:
@@ -539,87 +662,82 @@ def view_overview(a: dict, result: rk.RankingResult) -> None:
     zone = result.by_name(ss.zone)
 
     rules = [f".st-key-zbtn_{z.letter} button {{border-left-color: {PRIORITY_HEX[z.priority]};}}" for z in scored]
-    rules.append(f".st-key-zbtn_{zone.letter} button {{background: {SUBTLE}; border-color: {INK};"
-                 f"border-left-color: {PRIORITY_HEX[zone.priority]};}}")
+    zc = PRIORITY_HEX[zone.priority]
+    rules.append(f".st-key-zbtn_{zone.letter} button {{background: {rgba(zc, .14)}; border-color: {rgba(zc, .55)};"
+                 f"border-left-color: {zc}; color: {TEXT};}}")
     css("\n".join(rules))
 
-    header(a, "Response overview")
-
-    top = scored[0] if scored else None
-    k = st.columns(4, gap="medium")
-    k[0].markdown(kpi("High-priority zones", f"{result.count(rk.HIGH)}", f"of {len(result.zones)} zones",
-                      "Zones whose severity reached the high-priority level."), unsafe_allow_html=True)
-    k[1].markdown(kpi("Damaged building area", pct(stats["damaged_share"]) if scored else "—",
-                      "shows visible damage",
-                      "Share of the building area detected by the AI that shows minor damage, major damage "
-                      "or destruction. This is an area share, not a count of buildings."), unsafe_allow_html=True)
-    k[2].markdown(kpi("Severe damage", pct(stats["major_share"] + stats["destroyed_share"]) if scored else "—",
-                      "major damage or destroyed",
-                      "Share of the detected building area classified as major damage or destroyed."),
-                  unsafe_allow_html=True)
-    k[3].markdown(kpi("Most affected zone", top.name if top else "—",
-                      f"{PRIORITY_LABEL[top.priority]} · severity {top.score:.1f} / 5" if top
-                      else "no buildings detected",
-                      "The zone with the highest severity score."), unsafe_allow_html=True)
+    kpi_row(result, stats, scored)
     st.write("")
 
-    map_col, side_col = st.columns([1.7, 1], gap="large")
+    map_col, side_col = st.columns([1.75, 1], gap="large")
     with map_col:
         with st.container(key="card_map"):
-            st.markdown('<div class="label-sm">Priority map</div>', unsafe_allow_html=True)
-            st.plotly_chart(priority_map_figure(post_img, result, zone.letter), config=CHART_CONFIG,
+            h1, h2 = st.columns([1, 1.6], vertical_alignment="center")
+            h1.markdown(label("Priority map", CORAL), unsafe_allow_html=True)
+            layer = h2.segmented_control("Map layer", MAP_LAYERS, default=MAP_LAYERS[0], key="map_layer",
+                                         label_visibility="collapsed") or MAP_LAYERS[0]
+            base = map_base(post_img, a["mask"], result, zone.letter, layer)
+            st.plotly_chart(priority_map_figure(base, result), config=CHART_CONFIG,
                             on_select="rerun", selection_mode="points", key="priority_map")
-            st.markdown(priority_legend(), unsafe_allow_html=True)
-            st.markdown('<div class="muted" style="margin-top:6px">Click a zone to inspect it. Zones are equal '
-                        'sections of the image, not surveyed geographic areas.</div>', unsafe_allow_html=True)
+            legend = damage_legend() if layer == "Damage detection" else priority_legend()
+            st.markdown(f'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">'
+                        f'<div>{legend}</div><div class="muted" style="margin-top:4px">Click a zone to inspect it · '
+                        f'zones are image sections, not surveyed areas</div></div>', unsafe_allow_html=True)
 
     with side_col:
         with st.container(key="card_rank"):
-            st.markdown('<div class="label-sm">Zones by severity</div>', unsafe_allow_html=True)
+            st.markdown(label("Zones by severity", AMBER), unsafe_allow_html=True)
             if not scored:
                 st.markdown('<div class="muted">No buildings were detected, so no zone could be ranked.</div>',
                             unsafe_allow_html=True)
             for z in scored:
-                st.button(f"**{z.rank}. {z.name}**  ·  {z.priority}  ·  {z.score:.1f} / 5", key=f"zbtn_{z.letter}",
+                st.button(f"**{z.name}**  ·  {z.priority}  ·  {z.score:.1f}", key=f"zbtn_{z.letter}",
                           on_click=select_zone, args=(z.letter,))
             if unscored:
-                st.markdown(f'<div class="muted" style="margin-top:4px">No buildings detected: '
-                            f'{", ".join(z.name for z in unscored)}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="muted">No buildings detected: '
+                            f'{", ".join(z.letter for z in unscored)}</div>', unsafe_allow_html=True)
 
         st.write("")
         with st.container(key="card_zone"):
-            st.markdown('<div class="label-sm">Selected zone</div>', unsafe_allow_html=True)
+            st.markdown(label("Selected zone", zc), unsafe_allow_html=True)
             rank = f"Rank {zone.rank} of {len(scored)}" if zone.rank else "Not ranked"
             sev = (f'<span class="tip" title="0 = no visible damage, 5 = all detected building area destroyed">'
-                   f'Severity <b>{zone.score:.1f} / 5</b></span> · {rank}') if zone.score is not None else rank
+                   f'Severity <b class="num" style="color:{TEXT}">{zone.score:.1f} / 5</b></span> · {rank}'
+                   if zone.score is not None else rank)
             st.markdown(
-                f'<div style="font-size:1.3rem;font-weight:700;color:{INK}">{zone.name}&nbsp; {pill(zone.priority)}'
-                f'</div><div class="muted" style="margin:4px 0 10px">{sev}</div>'
-                f'<div style="font-size:.93rem;line-height:1.5;margin-bottom:8px">{esc(rk.zone_insight(zone))}</div>'
+                f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                f'<span style="font-size:1.35rem;font-weight:800;color:{TEXT}">{zone.name}</span>'
+                f'{pill(zone.priority)}</div>'
+                f'<div class="muted" style="margin:4px 0 10px">{sev}</div>'
+                f'<div style="font-size:.92rem;line-height:1.5;color:#E2E8F0;margin-bottom:6px">'
+                f'{esc(rk.zone_insight(zone))}</div>'
                 + (composition(zone_shares(zone), rows=False) + damage_legend() if zone.score is not None else ""),
                 unsafe_allow_html=True,
             )
-            st.button("Inspect zone in detail", key="inspect", on_click=inspect_zone, args=(zone.letter,))
+            st.button("Inspect zone in detail", key="inspect", icon=":material/zoom_in:", on_click=inspect_zone,
+                      args=(zone.letter,))
 
     st.write("")
     with st.container(key="card_summary"):
-        s1, s2 = st.columns([2.2, 1], gap="large")
+        s1, s2 = st.columns([2.3, 1], gap="large")
         with s1:
-            st.markdown('<div class="label-sm">Assessment summary</div>'
-                        f'<div style="font-size:1rem;line-height:1.6">{esc(rk.plain_summary(result))}</div>'
-                        '<div class="muted" style="margin-top:10px">AI-assisted estimate from satellite imagery for '
-                        'decision support. Not a verified field assessment or an operational emergency '
-                        'recommendation; it does not estimate casualties or population exposure.</div>',
-                        unsafe_allow_html=True)
+            st.markdown(label("Key findings", CORAL)
+                        + f'<div style="font-size:1.02rem;line-height:1.6;color:{TEXT}">'
+                          f'{esc(rk.plain_summary(result))}</div>'
+                          '<div class="muted" style="margin-top:8px">AI-assisted estimate from satellite imagery '
+                          'for decision support, not a verified field assessment. It does not estimate casualties '
+                          'or population exposure.</div>', unsafe_allow_html=True)
         with s2:
-            st.markdown('<div class="label-sm">Export</div>', unsafe_allow_html=True)
+            st.markdown(label("Export", TEAL), unsafe_allow_html=True)
             export_buttons(a, result, post_img)
 
 
 def export_buttons(a: dict, result: rk.RankingResult, post_img: Image.Image) -> None:
     buf = io.BytesIO()
     overlay_mask(post_img, a["mask"], alpha=ss.alpha).save(buf, format="PNG")
-    st.download_button("Damage overlay (PNG)", buf.getvalue(), "damage_overlay.png", "image/png")
+    st.download_button("Damage overlay (PNG)", buf.getvalue(), "damage_overlay.png", "image/png",
+                       key="dl_overlay", icon=":material/image:")
 
     df = pd.DataFrame(rk.zones_table(result)).rename(columns={
         "Score": "Severity (0-5)", "Building px %": "Building area (% of zone)",
@@ -627,7 +745,8 @@ def export_buttons(a: dict, result: rk.RankingResult, post_img: Image.Image) -> 
         "Major %": "Major damage (% of building area)", "Destroyed %": "Destroyed (% of building area)",
     })
     df["Priority"] = df["Priority"].replace({rk.INSUFFICIENT: PRIORITY_LABEL[rk.INSUFFICIENT]})
-    st.download_button("Zone ranking (CSV)", df.to_csv(index=False).encode(), "zone_ranking.csv", "text/csv")
+    st.download_button("Zone ranking (CSV)", df.to_csv(index=False).encode(), "zone_ranking.csv", "text/csv",
+                       key="dl_csv", icon=":material/table_chart:")
 
     lines = [a["name"], f"Type: {a['type']}" + (f" · Imagery captured {a['date']}" if a.get("date") else ""), "",
              rk.plain_summary(result), "", "Zones by severity:"]
@@ -639,11 +758,11 @@ def export_buttons(a: dict, result: rk.RankingResult, post_img: Image.Image) -> 
               "Percentages are shares of the building area detected by the AI, not counts of buildings.",
               "AI-assisted estimate for decision support; not a verified field assessment."]
     st.download_button("Assessment summary (TXT)", "\n".join(lines).encode(), "assessment_summary.txt",
-                       "text/plain")
+                       "text/plain", key="dl_txt", icon=":material/description:")
 
 
 # ---------------------------------------------------------------------------
-# View 3: Detailed Analysis
+# View 3: Detailed Analysis (tabs)
 # ---------------------------------------------------------------------------
 
 
@@ -655,9 +774,9 @@ def zone_chart(result: rk.RankingResult) -> go.Figure:
     for c in range(1, 5):
         fig.add_bar(name=DAMAGE_LABEL[c], x=ticks, y=[100 * z.share(c) for z in grid], marker_color=CLASS_HEX[c],
                     hovertemplate=f"%{{x}}<br>{DAMAGE_LABEL[c]}: %{{y:.0f}}% of building area<extra></extra>")
-    fig.update_layout(**CHART_LAYOUT, barmode="stack", height=330, bargap=0.35,
+    fig.update_layout(**CHART_LAYOUT, barmode="stack", height=340, bargap=0.38,
                       legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, title=None))
-    fig.update_yaxes(range=[0, 100], ticksuffix="%", gridcolor=LINE, title=None)
+    fig.update_yaxes(range=[0, 100], ticksuffix="%", gridcolor="rgba(148,163,184,.12)", title=None)
     fig.update_xaxes(title=None)
     return fig
 
@@ -669,50 +788,35 @@ def view_detail(a: dict, result: rk.RankingResult) -> None:
     if ss.zone not in [z.letter for z in result.zones]:
         ss.zone = result.zones[0].letter
 
-    header(a, "Detailed damage analysis")
+    t_img, t_zone, t_break, t_tech = st.tabs(["Before & after", "Zone close-up", "Damage breakdown",
+                                              "Technical details"])
 
-    # --- imagery ------------------------------------------------------------
-    with st.container(key="card_imagery"):
-        c1, c2 = st.columns([1.6, 1], vertical_alignment="center")
+    # --- before & after -------------------------------------------------------
+    with t_img:
+        c1, c2 = st.columns([1.7, 1], vertical_alignment="center")
         c1.markdown(damage_legend(), unsafe_allow_html=True)
         ss.alpha = c2.slider("Damage overlay opacity", 0.0, 1.0, float(ss.alpha), 0.05)
         overlay = overlay_mask(post_img, a["mask"], alpha=ss.alpha)
         i1, i2 = st.columns(2, gap="medium")
-        if pre_img is not None:
-            i1.image(pre_img, caption="Before the disaster (for comparison, not analyzed)")
-        else:
-            i1.image(post_img, caption="After the disaster (no before image provided)")
-        i2.image(overlay, caption="After the disaster, with AI-detected building damage")
-
-    st.write("")
-
-    # --- damage breakdown ----------------------------------------------------
-    b1, b2 = st.columns([1, 1.9], gap="large")
-    with b1:
-        with st.container(key="card_overall"):
-            st.markdown('<div class="label-sm">Damage across the image</div>', unsafe_allow_html=True)
-            if stats["building_pixels"]:
-                shares = {1: stats["no_damage_share"], 2: stats["minor_share"], 3: stats["major_share"],
-                          4: stats["destroyed_share"]}
-                st.markdown(composition(shares) +
-                            f'<div class="muted" style="margin-top:10px">Shares of the detected building area. '
-                            f'Buildings cover about {pct(stats["building_coverage"])} of the image.</div>',
-                            unsafe_allow_html=True)
+        with i1:
+            if pre_img is not None:
+                st.markdown('<div class="frame-label"><span class="dot" style="background:#64748B"></span>'
+                            'Before · reference only</div>', unsafe_allow_html=True)
+                st.image(pre_img)
             else:
-                st.markdown('<div class="muted">No buildings were detected in this image.</div>',
-                            unsafe_allow_html=True)
-    with b2:
-        with st.container(key="card_zonechart"):
-            st.markdown('<div class="label-sm">Damage by zone</div>', unsafe_allow_html=True)
-            st.plotly_chart(zone_chart(result), config=CHART_CONFIG)
+                st.markdown('<div class="frame-label"><span class="dot" style="background:#64748B"></span>'
+                            'After · original (no before image provided)</div>', unsafe_allow_html=True)
+                st.image(post_img)
+        with i2:
+            st.markdown(f'<div class="frame-label"><span class="dot" style="background:{CORAL}"></span>'
+                        f'After · AI-detected building damage</div>', unsafe_allow_html=True)
+            st.image(overlay)
 
-    st.write("")
-
-    # --- zone inspection -----------------------------------------------------
-    with st.container(key="card_inspect"):
+    # --- zone close-up ----------------------------------------------------------
+    with t_zone:
         letters = [z.letter for z in result.zones]
         h1, h2 = st.columns([2, 1], vertical_alignment="center")
-        h1.markdown('<div class="label-sm">Zone close-up</div>', unsafe_allow_html=True)
+        h1.markdown(label("Zone close-up", PRIORITY_HEX[result.by_name(ss.zone).priority]), unsafe_allow_html=True)
         choice = h2.selectbox(
             "Zone", letters, index=letters.index(ss.zone), label_visibility="collapsed",
             format_func=lambda l: f"{result.by_name(l).name} · {PRIORITY_LABEL[result.by_name(l).priority]}",
@@ -721,42 +825,71 @@ def view_detail(a: dict, result: rk.RankingResult) -> None:
             ss.zone = choice
         z = result.by_name(ss.zone)
 
-        cols = st.columns([1, 1, 0.95] if pre_img is not None else [1.3, 1], gap="medium")
+        cols = st.columns([1, 1, 0.9] if pre_img is not None else [1.3, 1], gap="medium")
         if pre_img is not None:
             sx, sy = pre_img.size[0] / post_img.size[0], pre_img.size[1] / post_img.size[1]
             x0, y0, x1, y1 = z.bbox
             pre_box = (round(x0 * sx), round(y0 * sy), round(x1 * sx), round(y1 * sy))
-            cols[0].image(enlarge(crop_box(pre_img, pre_box)), caption=f"{z.name} before")
-        cols[-2].image(enlarge(crop_box(overlay, z.bbox)), caption=f"{z.name} after, with detected damage")
+            with cols[0]:
+                st.markdown(f'<div class="frame-label">{z.name} · before</div>', unsafe_allow_html=True)
+                st.image(enlarge(crop_box(pre_img, pre_box)))
+        with cols[-2]:
+            st.markdown(f'<div class="frame-label">{z.name} · after, detected damage</div>', unsafe_allow_html=True)
+            st.image(enlarge(crop_box(overlay, z.bbox)))
         with cols[-1]:
-            rows = ""
-            if z.score is not None:
-                rows = (f'<div class="crow"><span>Severity</span><b>{z.score:.1f} / 5</b></div>'
-                        f'<div class="crow"><span>Rank</span><b>{z.rank} of {sum(1 for q in result.zones if q.rank)}'
-                        f'</b></div>'
-                        f'<div class="crow"><span class="tip" title="Share of the zone the AI classified as '
-                        f'building, at any damage level">Building area in zone</span>'
-                        f'<b>{pct(z.building_coverage)}</b></div>'
-                        f'<div class="crow"><span>Visible damage</span><b>{pct(z.damaged_share)}</b></div>'
-                        f'<div class="crow"><span>Major damage or destroyed</span><b>{pct(z.severe_share)}</b></div>')
-            st.markdown(
-                f'<div style="font-size:1.25rem;font-weight:700">{z.name}&nbsp; {pill(z.priority)}</div>'
-                f'<div style="font-size:.92rem;line-height:1.5;margin:8px 0 10px">{esc(rk.zone_insight(z))}</div>'
-                + rows
-                + (('<div class="label-sm" style="margin-top:14px">Damage mix in this zone</div>'
-                    + composition(zone_shares(z))) if z.score is not None else ""),
-                unsafe_allow_html=True,
-            )
+            with st.container(key="card_zonestats"):
+                rows = ""
+                if z.score is not None:
+                    rows = (f'<div class="crow"><span>Severity</span><b>{z.score:.1f} / 5</b></div>'
+                            f'<div class="crow"><span>Rank</span><b>{z.rank} of '
+                            f'{sum(1 for q in result.zones if q.rank)}</b></div>'
+                            f'<div class="crow"><span class="tip" title="Share of the zone the AI classified as '
+                            f'building, at any damage level">Building area in zone</span>'
+                            f'<b>{pct(z.building_coverage)}</b></div>'
+                            f'<div class="crow"><span>Visible damage</span><b>{pct(z.damaged_share)}</b></div>'
+                            f'<div class="crow"><span>Major damage or destroyed</span><b>{pct(z.severe_share)}</b>'
+                            f'</div>')
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;align-items:center">'
+                    f'<span style="font-size:1.3rem;font-weight:800;color:{TEXT}">{z.name}</span>{pill(z.priority)}'
+                    f'</div><div style="font-size:.9rem;line-height:1.5;color:#E2E8F0;margin:8px 0 10px">'
+                    f'{esc(rk.zone_insight(z))}</div>' + rows
+                    + ((label("Damage mix in this zone", AMBER) + composition(zone_shares(z)))
+                       if z.score is not None else ""),
+                    unsafe_allow_html=True,
+                )
 
-    st.write("")
-    technical_details(a, result)
+    # --- damage breakdown -------------------------------------------------------
+    with t_break:
+        b1, b2 = st.columns([1, 2], gap="large")
+        with b1:
+            with st.container(key="card_overall"):
+                st.markdown(label("Damage across the image", CORAL), unsafe_allow_html=True)
+                if stats["building_pixels"]:
+                    shares = {1: stats["no_damage_share"], 2: stats["minor_share"], 3: stats["major_share"],
+                              4: stats["destroyed_share"]}
+                    st.markdown(composition(shares) +
+                                f'<div class="muted" style="margin-top:10px">Shares of the detected building '
+                                f'area. Buildings cover about {pct(stats["building_coverage"])} of the image.</div>',
+                                unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="muted">No buildings were detected in this image.</div>',
+                                unsafe_allow_html=True)
+        with b2:
+            with st.container(key="card_zonechart"):
+                st.markdown(label("Damage by zone", AMBER), unsafe_allow_html=True)
+                st.plotly_chart(zone_chart(result), config=CHART_CONFIG)
+
+    # --- technical details ------------------------------------------------------
+    with t_tech:
+        technical_details(a, result)
 
 
 def technical_details(a: dict, result: rk.RankingResult) -> None:
-    with st.expander("Technical details"):
-        t1, t2 = st.columns(2, gap="large")
-        with t1:
-            st.markdown("**Processing**")
+    t1, t2 = st.columns(2, gap="large")
+    with t1:
+        with st.container(key="card_processing"):
+            st.markdown(label("Processing", TEAL), unsafe_allow_html=True)
             st.markdown(
                 f"- Processed on {a['device'].upper()} in {a['seconds']:.2f} s\n"
                 f"- Image size {a['size'][0]} × {a['size'][1]} px; AI input "
@@ -765,8 +898,9 @@ def technical_details(a: dict, result: rk.RankingResult) -> None:
                 f"- The model analyzes the after-disaster image only; it does not perform before/after "
                 f"change detection."
             )
-        with t2:
-            st.markdown("**Scoring method**")
+    with t2:
+        with st.container(key="card_method"):
+            st.markdown(label("Scoring method", AMBER), unsafe_allow_html=True)
             st.markdown(
                 "- Severity = (1 × minor + 3 × major + 5 × destroyed) ÷ detected building area, per zone\n"
                 "- Background is excluded; zones without detected buildings are not scored\n"
@@ -775,8 +909,10 @@ def technical_details(a: dict, result: rk.RankingResult) -> None:
                 "- Zones are a 3 × 3 division of the image, not geographic areas"
             )
 
-        if a.get("labels_path"):
-            st.markdown("**Accuracy check against reference annotations**")
+    if a.get("labels_path"):
+        st.write("")
+        with st.container(key="card_accuracy"):
+            st.markdown(label("Accuracy check against reference annotations", CORAL), unsafe_allow_html=True)
             st.caption("Compares the AI result with the dataset's human annotations for this image. The "
                        "annotations are used only for this check, never as results.")
             if st.toggle("Compute accuracy metrics"):
@@ -791,18 +927,19 @@ def technical_details(a: dict, result: rk.RankingResult) -> None:
                 e1.metric("Building detection IoU", f(ev["building_iou"]))
                 e2.metric("Mean damage-class IoU", f(ev["mean_damage_iou"]))
                 e3.metric("Pixel accuracy", f(ev["pixel_accuracy"]))
-                st.dataframe(pd.DataFrame([
+                m1, m2 = st.columns([1, 1.2], gap="large")
+                m1.dataframe(pd.DataFrame([
                     {"Class": m["class"], "IoU": f(m["iou"]), "Precision": f(m["precision"]),
                      "Recall": f(m["recall"])} for m in ev["per_class"].values()
                 ]), hide_index=True)
                 names = [CLASS_NAMES[c] for c in range(5)]
                 fig = go.Figure(go.Heatmap(z=ev["confusion_matrix"], x=names, y=names,
-                                           colorscale=[[0, SURFACE], [1, INK]], showscale=False,
+                                           colorscale=[[0, SURFACE], [1, CORAL]], showscale=False,
                                            hovertemplate="Reference %{y} → AI %{x}: %{z:,} px<extra></extra>"))
-                fig.update_layout(**CHART_LAYOUT, height=340)
+                fig.update_layout(**CHART_LAYOUT, height=320)
                 fig.update_xaxes(title="AI result")
                 fig.update_yaxes(title="Reference annotation", autorange="reversed")
-                st.plotly_chart(fig, config=CHART_CONFIG)
+                m2.plotly_chart(fig, config=CHART_CONFIG)
 
 
 # ---------------------------------------------------------------------------
@@ -819,6 +956,6 @@ else:
     else:
         view_detail(assessment, ranking)
 
-st.markdown('<div class="footer">AI-assisted damage assessment for decision support. Results are estimates '
-            'from satellite imagery, not verified field assessments. Percentages describe detected building '
-            'area, not numbers of buildings.</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">AI-assisted damage assessment for decision support. Results are estimates from '
+            'satellite imagery, not verified field assessments. Percentages describe detected building area, '
+            'not numbers of buildings.</div>', unsafe_allow_html=True)

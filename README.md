@@ -58,26 +58,30 @@ upload your own pre/post images in the dashboard without adding any files.
 
 ## Using the dashboard
 
-The app has three views, switched from the navigation bar at the top.
+A dark, command-center style interface with three views, switched from the navigation bar under the header.
 
-1. **New Assessment**: enter the disaster name and type, choose a saved case or upload an after-disaster image
-   (required) and a before-disaster image (optional), check the previews, then click **Analyze with AI**.
+1. **New Assessment**: choose a saved case or upload an after-disaster image (required) and a before-disaster
+   image (optional), enter the disaster name and type, check the previews, then click **Analyze with AI**.
 2. **Response Overview** opens when the assessment finishes:
-   - four key indicators (high-priority zones, damaged building area, severe damage, most affected zone);
-   - the **priority map**, the image divided into nine zones tinted by priority. Hover a zone for its figures
-     and click it to select it;
-   - a ranked list of zones (name, priority, severity) beside the map, plus details for the selected zone;
-   - a plain-language assessment summary and exports: damage overlay (PNG), zone ranking (CSV) and
-     assessment summary (TXT).
-3. **Detailed Analysis**: large before/after imagery with the AI damage overlay and an opacity control, damage
-   breakdown across the image and by zone, and before/after close-ups with statistics for any zone.
+   - summary cards: high-priority zones (with a mini zone grid), damaged building area, severe damage and the
+     most affected zone;
+   - the **priority map**, the image divided into nine zones with a light priority tint, thin boundaries and
+     compact labels. Switch layers between *Priority zones*, *Damage detection* and *Satellite only*; hover a
+     zone for its figures and click it to select it;
+   - a ranked list of zones beside the map and a panel for the selected zone;
+   - key findings in plain language and exports: damage overlay (PNG), zone ranking (CSV) and assessment
+     summary (TXT).
+3. **Detailed Analysis**, organised in tabs:
+   - **Before & after**: large imagery with an overlay opacity control;
+   - **Zone close-up**: before/after crops and statistics for any zone;
+   - **Damage breakdown**: the image-wide damage mix and damage by zone;
+   - **Technical details**: processing information, the scoring method and, for cases with xBD labels, an
+     accuracy check against the reference annotations. The annotations are used only for that check and are
+     never shown as results.
 
-**Advanced settings** (top right) holds the priority levels and information about the AI model. On the
-Detailed Analysis view, **Technical details** shows processing information, the scoring method and, for
-cases with xBD labels, an accuracy check against the reference annotations (IoU, precision, recall, confusion
-matrix). The annotations are used only for that check and are never shown as results.
+**Advanced settings** (next to the navigation) holds the priority levels and information about the AI model.
 
-Priority colours: red = high, amber = medium, teal = low, grey = no buildings detected. Damage colours: green
+Priority colours: coral = high, amber = medium, teal = low, slate = no buildings detected. Damage colours: green
 = no visible damage, yellow = minor, orange = major, red = destroyed. Every colour also has a text label.
 
 ## Scoring
@@ -133,7 +137,7 @@ verify_inference.py  CLI: real inference check on one image
 evaluate.py          CLI: evaluation on local labelled cases
 tests/               pytest suite
 data/samples/        Local disaster cases (add your own xBD tiles)
-.streamlit/          Light theme (colour palette)
+.streamlit/          Dark theme (colour palette)
 ```
 
 ## Model
