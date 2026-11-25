@@ -198,14 +198,6 @@ st.markdown(
                  border: 1px dashed rgba(148,163,184,.25); border-radius: 12px; height: 330px; display: flex;
                  align-items: center; justify-content: center; text-align: center; color: {MUTED};
                  font-size: .85rem; padding: 16px;}}
-  .step {{position: relative; background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 12px;
-          padding: 12px 14px 12px 56px; min-height: 74px;}}
-  .step .n {{position: absolute; left: 14px; top: 13px; width: 30px; height: 30px; border-radius: 9px;
-             display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .9rem;
-             color: var(--acc); background: var(--glow); border: 1px solid var(--acc);}}
-  .step b {{color: {TEXT}; font-size: .92rem;}}
-  .step div {{color: {MUTED}; font-size: .8rem; margin-top: 2px; line-height: 1.35;}}
-
   .footer {{position: relative; color: #7C8AA0; font-size: .76rem; margin-top: 22px; padding-top: 12px;}}
   .footer::before {{content: ""; position: absolute; left: 0; top: 0; width: 120px; height: 2px; background: {TRI};
                     border-radius: 2px;}}
@@ -413,19 +405,6 @@ st.write("")
 # ---------------------------------------------------------------------------
 
 
-def steps_strip() -> None:
-    steps = [
-        (CORAL, "1", "Select imagery", "Pick a saved disaster case or upload an after-disaster satellite image."),
-        (AMBER, "2", "AI detects damage", "The model classifies every building area as intact, minor, major "
-                                          "or destroyed."),
-        (TEAL, "3", "Prioritize zones", "The image is split into nine zones and ranked by damage severity."),
-    ]
-    cols = st.columns(3, gap="medium")
-    for col, (acc, n, title, text) in zip(cols, steps):
-        col.markdown(f'<div class="step" style="--acc:{acc};--glow:{rgba(acc, .14)}"><span class="n">{n}</span>'
-                     f'<b>{title}</b><div>{text}</div></div>', unsafe_allow_html=True)
-
-
 def view_new() -> None:
     cases = dl.discover_cases()
     left, right = st.columns([1, 1.45], gap="large")
@@ -490,8 +469,6 @@ def view_new() -> None:
         st.write("")
         run = st.button("Analyze with AI", type="primary", icon=":material/bolt:", disabled=post_img is None,
                         key="run")
-        st.markdown('<div class="muted" style="text-align:center">The AI analyzes the after-disaster image. '
-                    'The before image is for comparison only.</div>', unsafe_allow_html=True)
 
     with right:
         with st.container(key="card_preview"):
@@ -513,9 +490,6 @@ def view_new() -> None:
                 else:
                     st.markdown('<div class="placeholder">Select a case or upload an<br>after-disaster image</div>',
                                 unsafe_allow_html=True)
-
-    st.write("")
-    steps_strip()
 
     if run and post_img is not None:
         try:
