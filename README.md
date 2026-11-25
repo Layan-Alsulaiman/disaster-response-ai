@@ -58,18 +58,27 @@ upload your own pre/post images in the dashboard without adding any files.
 
 ## Using the dashboard
 
-1. **Disaster Selection**: pick a sample case or upload images, then click **Analyze with AI**.
-2. **Satellite Image Analysis**: before / after / AI damage overlay, colour legend and opacity slider.
-3. **Damage Overview**: share of predicted building pixels that are damaged, plus Minor, Major and Destroyed
-   proportions and per-zone damage mix.
-4. **Priority Map**: the image tinted by zone priority; click a zone button to select it.
-5. **Zone Ranking**: sorted table (score, priority, breakdown), score chart, and details and close-up for the
-   selected zone.
-6. **Analysis Summary**: template-generated text built only from computed numbers; downloads for the overlay
-   (PNG), ranking (CSV) and summary (TXT).
+The app has three views, switched from the navigation bar at the top.
 
-For cases with xBD labels, an expander can compute **evaluation metrics** (IoU, precision, recall, confusion
-matrix) against the ground truth. Ground truth is used only for scoring and is never shown as a prediction.
+1. **New Assessment**: enter the disaster name and type, choose a saved case or upload an after-disaster image
+   (required) and a before-disaster image (optional), check the previews, then click **Analyze with AI**.
+2. **Response Overview** opens when the assessment finishes:
+   - four key indicators (high-priority zones, damaged building area, severe damage, most affected zone);
+   - the **priority map**, the image divided into nine zones tinted by priority. Hover a zone for its figures
+     and click it to select it;
+   - a ranked list of zones (name, priority, severity) beside the map, plus details for the selected zone;
+   - a plain-language assessment summary and exports: damage overlay (PNG), zone ranking (CSV) and
+     assessment summary (TXT).
+3. **Detailed Analysis**: large before/after imagery with the AI damage overlay and an opacity control, damage
+   breakdown across the image and by zone, and before/after close-ups with statistics for any zone.
+
+**Advanced settings** (top right) holds the priority levels and information about the AI model. On the
+Detailed Analysis view, **Technical details** shows processing information, the scoring method and, for
+cases with xBD labels, an accuracy check against the reference annotations (IoU, precision, recall, confusion
+matrix). The annotations are used only for that check and are never shown as results.
+
+Priority colours: red = high, amber = medium, teal = low, grey = no buildings detected. Damage colours: green
+= no visible damage, yellow = minor, orange = major, red = destroyed. Every colour also has a text label.
 
 ## Scoring
 
@@ -85,8 +94,8 @@ predicted building px = No Damage + Minor + Major + Destroyed      (background e
 | < 1.0 | Low |
 | no building pixels | Insufficient Data |
 
-Thresholds are preliminary design choices, not validated standards. Change them live in the dashboard sidebar or
-edit `DEFAULT_THRESHOLDS` / `DAMAGE_WEIGHTS` in `ranking.py`. Zones are image sectors A–I (row by row), not
+Thresholds are preliminary design choices, not validated standards. Change them under **Advanced settings** in
+the dashboard or edit `DEFAULT_THRESHOLDS` / `DAMAGE_WEIGHTS` in `ranking.py`. Zones are image sectors A–I (row by row), not
 geographic areas. All percentages are pixel proportions, **not building counts**.
 
 ## Command-line tools
@@ -114,7 +123,7 @@ to check shapes, resizing and caching offline. Neither is ever used as a predict
 ## Project structure
 
 ```
-app.py               Streamlit dashboard (sections 1–6, optional evaluation)
+app.py               Streamlit app: New Assessment, Response Overview, Detailed Analysis
 model.py             Cached checkpoint loading (CUDA/CPU) and inference
 image_processing.py  Preprocessing, damage overlay, priority-map rendering
 ranking.py           3×3 zones, scores, priorities, explanations, summary
@@ -124,7 +133,7 @@ verify_inference.py  CLI: real inference check on one image
 evaluate.py          CLI: evaluation on local labelled cases
 tests/               pytest suite
 data/samples/        Local disaster cases (add your own xBD tiles)
-.streamlit/          Dashboard theme
+.streamlit/          Light theme (colour palette)
 ```
 
 ## Model
