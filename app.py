@@ -1,4 +1,4 @@
-"""Disaster Damage Intelligence: Streamlit front end (dark command-center theme).
+"""GeoPulse: Streamlit front end (dark command-center theme).
 
 Three views, switched from the navigation bar under the header:
   * New Assessment       choose a case or upload imagery, run the AI assessment
@@ -35,7 +35,7 @@ MODEL_REPO = "BiliSakura/xBD-post-bda-models-transformers"
 MODEL_CHECKPOINT = "segformer-b0/xbd-baseline/best"
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "logo.svg"
 
-st.set_page_config(page_title="Disaster Damage Intelligence", page_icon=":material/satellite_alt:",
+st.set_page_config(page_title="GeoPulse", page_icon=":material/satellite_alt:",
                    layout="wide", initial_sidebar_state="collapsed")
 
 # ---------------------------------------------------------------------------
@@ -369,7 +369,7 @@ else:
                  'No active assessment</span></div>')
 
 st.markdown(
-    f'<div class="hero"><div class="brand">{logo_img()}<div><h1>Disaster Damage Intelligence</h1>'
+    f'<div class="hero"><div class="brand">{logo_img()}<div><h1>GeoPulse</h1>'
     f'<div class="tagline">Satellite assessment · Response prioritization</div></div></div>'
     f'{case_html}</div>',
     unsafe_allow_html=True,
